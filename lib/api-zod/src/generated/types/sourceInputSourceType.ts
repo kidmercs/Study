@@ -12,4 +12,5 @@ export type SourceInputSourceType = typeof SourceInputSourceType[keyof typeof So
 export const SourceInputSourceType = {
   youtube: 'youtube',
   text: 'text',
+  pdf: 'pdf',
 } as const;

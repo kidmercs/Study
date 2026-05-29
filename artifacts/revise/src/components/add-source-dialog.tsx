@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -24,7 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Link2, FileText, Loader2 } from "lucide-react";
+import { Link2, FileText, Loader2, FileUp } from "lucide-react";
 
 const CARD_COUNT_OPTIONS = [5, 10, 20, 30, 50, 75, 100] as const;
 
@@ -36,6 +36,10 @@ const youtubeSchema = z.object({
 const textSchema = z.object({
   textTitle: z.string().min(1, "Title is required").max(100),
   textContent: z.string().min(10, "Text content must be at least 10 characters"),
+  maxFlashcards: z.number().min(5).max(100),
+});
+
+const pdfSchema = z.object({
   maxFlashcards: z.number().min(5).max(100),
 });
 
@@ -74,9 +78,33 @@ function CardCountPicker({
   );
 }
 
+async function extractPdfText(file: File): Promise<string> {
+  const pdfjsLib = await import("pdfjs-dist");
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/build/pdf.worker.min.mjs",
+    import.meta.url
+  ).toString();
+
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const pages: string[] = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const pageText = content.items
+      .map((item: any) => ("str" in item ? item.str : ""))
+      .join(" ");
+    pages.push(pageText);
+  }
+  return pages.join("\n\n");
+}
+
 export function AddSourceDialog({ children }: AddSourceDialogProps) {
   const [open, setOpen] = React.useState(false);
-  const [tab, setTab] = React.useState<"youtube" | "text">("youtube");
+  const [tab, setTab] = React.useState<"youtube" | "text" | "pdf">("youtube");
+  const [pdfFile, setPdfFile] = React.useState<File | null>(null);
+  const [isExtractingPdf, setIsExtractingPdf] = React.useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const createSource = useCreateSource();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -91,15 +119,14 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
     defaultValues: { textTitle: "", textContent: "", maxFlashcards: 10 },
   });
 
+  const pdfForm = useForm<z.infer<typeof pdfSchema>>({
+    resolver: zodResolver(pdfSchema),
+    defaultValues: { maxFlashcards: 10 },
+  });
+
   const onSubmitYoutube = (values: z.infer<typeof youtubeSchema>) => {
     createSource.mutate(
-      {
-        data: {
-          sourceType: "youtube",
-          youtubeUrl: values.youtubeUrl,
-          maxFlashcards: values.maxFlashcards,
-        },
-      },
+      { data: { sourceType: "youtube", youtubeUrl: values.youtubeUrl, maxFlashcards: values.maxFlashcards } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey() });
@@ -138,6 +165,49 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
     );
   };
 
+  const onSubmitPdf = async (values: z.infer<typeof pdfSchema>) => {
+    if (!pdfFile) {
+      toast({ title: "No file selected", description: "Please choose a PDF file.", variant: "destructive" });
+      return;
+    }
+    setIsExtractingPdf(true);
+    try {
+      const text = await extractPdfText(pdfFile);
+      if (!text.trim()) {
+        toast({ title: "Could not read PDF", description: "The PDF appears to have no extractable text.", variant: "destructive" });
+        return;
+      }
+      createSource.mutate(
+        {
+          data: {
+            sourceType: "pdf",
+            textTitle: pdfFile.name.replace(/\.pdf$/i, ""),
+            textContent: text,
+            maxFlashcards: values.maxFlashcards,
+          },
+        },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey() });
+            setOpen(false);
+            setPdfFile(null);
+            pdfForm.reset();
+            toast({ title: "Source added", description: "Processing your PDF..." });
+          },
+          onError: () => {
+            toast({ title: "Error", description: "Failed to add source.", variant: "destructive" });
+          },
+        }
+      );
+    } catch {
+      toast({ title: "Error reading PDF", description: "Could not extract text from this file.", variant: "destructive" });
+    } finally {
+      setIsExtractingPdf(false);
+    }
+  };
+
+  const isPending = createSource.isPending || isExtractingPdf;
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -147,15 +217,19 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
         <DialogHeader>
           <DialogTitle>Add a new study source</DialogTitle>
         </DialogHeader>
-        <Tabs value={tab} onValueChange={(v) => setTab(v as "youtube" | "text")} className="mt-4">
-          <TabsList className="grid w-full grid-cols-2">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="mt-4">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="youtube" data-testid="tab-youtube">
-              <Link2 className="w-4 h-4 mr-2" />
-              YouTube Video
+              <Link2 className="w-4 h-4 mr-1.5" />
+              YouTube
             </TabsTrigger>
             <TabsTrigger value="text" data-testid="tab-text">
-              <FileText className="w-4 h-4 mr-2" />
-              Text Document
+              <FileText className="w-4 h-4 mr-1.5" />
+              Text
+            </TabsTrigger>
+            <TabsTrigger value="pdf" data-testid="tab-pdf">
+              <FileUp className="w-4 h-4 mr-1.5" />
+              PDF
             </TabsTrigger>
           </TabsList>
 
@@ -169,11 +243,7 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
                     <FormItem>
                       <FormLabel>YouTube URL</FormLabel>
                       <FormControl>
-                        <Input
-                          placeholder="https://youtube.com/watch?v=..."
-                          {...field}
-                          data-testid="input-youtube-url"
-                        />
+                        <Input placeholder="https://youtube.com/watch?v=..." {...field} data-testid="input-youtube-url" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -191,13 +261,9 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
                   )}
                 />
                 <div className="flex justify-end pt-1">
-                  <Button
-                    type="submit"
-                    disabled={createSource.isPending}
-                    data-testid="button-submit-youtube"
-                  >
-                    {createSource.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                    Generate Flashcards
+                  <Button type="submit" disabled={isPending} data-testid="button-submit-youtube">
+                    {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    Generate Study Materials
                   </Button>
                 </div>
               </form>
@@ -214,11 +280,7 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
                     <FormItem>
                       <FormLabel>Document Title</FormLabel>
                       <FormControl>
-                        <Input
-                          placeholder="E.g., Chapter 4: Cellular Respiration"
-                          {...field}
-                          data-testid="input-text-title"
-                        />
+                        <Input placeholder="E.g., Chapter 4: Cellular Respiration" {...field} data-testid="input-text-title" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -254,13 +316,61 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
                   )}
                 />
                 <div className="flex justify-end pt-1">
-                  <Button
-                    type="submit"
-                    disabled={createSource.isPending}
-                    data-testid="button-submit-text"
+                  <Button type="submit" disabled={isPending} data-testid="button-submit-text">
+                    {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    Generate Study Materials
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </TabsContent>
+
+          <TabsContent value="pdf">
+            <Form {...pdfForm}>
+              <form onSubmit={pdfForm.handleSubmit(onSubmitPdf)} className="space-y-5 pt-4">
+                <div>
+                  <p className="text-sm font-medium mb-2 text-foreground">PDF File</p>
+                  <div
+                    className="border-2 border-dashed border-border rounded-xl p-6 text-center cursor-pointer hover:border-primary/60 hover:bg-muted/30 transition-colors"
+                    onClick={() => fileInputRef.current?.click()}
                   >
-                    {createSource.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                    Generate Flashcards
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      className="hidden"
+                      onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)}
+                    />
+                    {pdfFile ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <FileUp className="w-8 h-8 text-primary" />
+                        <p className="text-sm font-medium text-foreground truncate max-w-full">{pdfFile.name}</p>
+                        <p className="text-xs text-muted-foreground">{(pdfFile.size / 1024 / 1024).toFixed(1)} MB — click to change</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <FileUp className="w-8 h-8 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">Click to upload a PDF</p>
+                        <p className="text-xs text-muted-foreground/60">Supports text-based PDFs</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <FormField
+                  control={pdfForm.control}
+                  name="maxFlashcards"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <CardCountPicker value={field.value} onChange={field.onChange} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <div className="flex justify-end pt-1">
+                  <Button type="submit" disabled={isPending || !pdfFile} data-testid="button-submit-pdf">
+                    {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    {isExtractingPdf ? "Reading PDF..." : "Generate Study Materials"}
                   </Button>
                 </div>
               </form>

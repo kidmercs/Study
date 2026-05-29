@@ -1,18 +1,23 @@
-import React, { useRef } from "react";
+import React from "react";
 import { useParams, Link } from "wouter";
 import { useGetSource, useReviewFlashcard, getGetSourceQueryKey, getListSourcesQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { FlashcardView } from "@/components/flashcard-view";
+import { MindMapView } from "@/components/mind-map-view";
+import { PracticeQuestionsView } from "@/components/practice-questions-view";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ArrowLeft, BookOpen, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { ArrowLeft, BookOpen, ChevronDown, ChevronUp, Loader2, Layers, GitBranch, HelpCircle } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+
+type StudyMode = "flashcards" | "mindmap" | "questions";
 
 export default function StudySession() {
   const params = useParams();
   const id = parseInt(params.id || "0", 10);
   const queryClient = useQueryClient();
   const [isSummaryOpen, setIsSummaryOpen] = React.useState(false);
+  const [studyMode, setStudyMode] = React.useState<StudyMode>("flashcards");
 
   const { data: source, isLoading, error } = useGetSource(id, {
     query: {
@@ -24,23 +29,14 @@ export default function StudySession() {
   const reviewMutation = useReviewFlashcard({
     mutation: {
       onSuccess: (updatedCard) => {
-        // Optimistically update the specific flashcard in the cache without triggering full refetch
         queryClient.setQueryData(getGetSourceQueryKey(id), (old: any) => {
           if (!old) return old;
-          const updatedCards = old.flashcards.map((c: any) => 
+          const updatedCards = old.flashcards.map((c: any) =>
             c.id === updatedCard.id ? { ...c, known: updatedCard.known } : c
           );
-          
           const newKnownCount = updatedCards.filter((c: any) => c.known).length;
-          
-          return {
-            ...old,
-            flashcards: updatedCards,
-            knownCount: newKnownCount
-          };
+          return { ...old, flashcards: updatedCards, knownCount: newKnownCount };
         });
-        
-        // Background invalidation for lists
         queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey() });
       }
     }
@@ -72,9 +68,14 @@ export default function StudySession() {
 
   const progress = source.flashcardCount > 0 ? (source.knownCount / source.flashcardCount) * 100 : 0;
 
+  const modes: { key: StudyMode; label: string; icon: React.ReactNode }[] = [
+    { key: "flashcards", label: "Flashcards", icon: <Layers className="w-4 h-4" /> },
+    { key: "mindmap", label: "Mind Map", icon: <GitBranch className="w-4 h-4" /> },
+    { key: "questions", label: "Practice Quiz", icon: <HelpCircle className="w-4 h-4" /> },
+  ];
+
   return (
     <div className="min-h-screen pb-20">
-      {/* Top Navigation */}
       <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-md border-b">
         <div className="max-w-5xl mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
           <Link href="/">
@@ -83,12 +84,14 @@ export default function StudySession() {
               Library
             </Button>
           </Link>
-          <div className="text-sm font-medium flex items-center gap-3">
-            <span className="hidden sm:inline-block text-muted-foreground">{source.knownCount} / {source.flashcardCount} mastered</span>
-            <div className="w-24 sm:w-32">
-              <Progress value={progress} className="h-2" />
+          {studyMode === "flashcards" && (
+            <div className="text-sm font-medium flex items-center gap-3">
+              <span className="hidden sm:inline-block text-muted-foreground">{source.knownCount} / {source.flashcardCount} mastered</span>
+              <div className="w-24 sm:w-32">
+                <Progress value={progress} className="h-2" />
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </header>
 
@@ -104,6 +107,11 @@ export default function StudySession() {
               Document
             </span>
           )}
+          {source.sourceType === "pdf" && (
+            <span className="inline-block px-3 py-1 bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 rounded-full text-xs font-semibold mb-4 tracking-wide uppercase">
+              PDF
+            </span>
+          )}
           <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-4 text-foreground balance">{source.title}</h1>
           {source.channelName && (
             <p className="text-lg text-muted-foreground">{source.channelName}</p>
@@ -114,7 +122,7 @@ export default function StudySession() {
           <Collapsible
             open={isSummaryOpen}
             onOpenChange={setIsSummaryOpen}
-            className="mb-16 bg-muted/30 border rounded-xl overflow-hidden max-w-3xl mx-auto transition-all"
+            className="mb-10 bg-muted/30 border rounded-xl overflow-hidden max-w-3xl mx-auto transition-all"
           >
             <CollapsibleTrigger asChild>
               <Button variant="ghost" className="w-full flex items-center justify-between p-4 h-auto rounded-none hover:bg-muted/50">
@@ -135,12 +143,41 @@ export default function StudySession() {
           </Collapsible>
         )}
 
-        <div className="mt-12">
-          <FlashcardView 
-            cards={source.flashcards || []} 
-            onReview={handleReview} 
-            isReviewing={reviewMutation.isPending}
-          />
+        {/* Study Mode Tabs */}
+        <div className="flex justify-center mb-10">
+          <div className="inline-flex bg-muted/50 rounded-xl p-1 gap-1 border">
+            {modes.map(({ key, label, icon }) => (
+              <button
+                key={key}
+                onClick={() => setStudyMode(key)}
+                className={[
+                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
+                  studyMode === key
+                    ? "bg-background text-foreground shadow-sm border border-border/60"
+                    : "text-muted-foreground hover:text-foreground",
+                ].join(" ")}
+              >
+                {icon}
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4">
+          {studyMode === "flashcards" && (
+            <FlashcardView
+              cards={source.flashcards || []}
+              onReview={handleReview}
+              isReviewing={reviewMutation.isPending}
+            />
+          )}
+          {studyMode === "mindmap" && (
+            <MindMapView mindMapJson={source.mindMap ?? null} />
+          )}
+          {studyMode === "questions" && (
+            <PracticeQuestionsView questions={source.questions || []} />
+          )}
         </div>
       </main>
     </div>

@@ -275,7 +275,7 @@ export const getGetSourceUrl = (id: number,) => {
 }
 
 /**
- * @summary Get a source with its summary and flashcards
+ * @summary Get a source with its summary, flashcards, mind map, and practice questions
  */
 export const getSource = async (id: number, options?: RequestInit): Promise<SourceDetail> => {
 
@@ -322,7 +322,7 @@ export type GetSourceQueryError = ErrorType<void>
 
 
 /**
- * @summary Get a source with its summary and flashcards
+ * @summary Get a source with its summary, flashcards, mind map, and practice questions
  */
 
 export function useGetSource<TData = Awaited<ReturnType<typeof getSource>>, TError = ErrorType<void>>(

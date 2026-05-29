@@ -9,6 +9,7 @@
 export * from './flashcard';
 export * from './flashcardReview';
 export * from './healthStatus';
+export * from './practiceQuestion';
 export * from './source';
 export * from './sourceDetail';
 export * from './sourceDetailSourceType';

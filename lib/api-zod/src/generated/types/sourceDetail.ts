@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Flashcard } from './flashcard';
+import type { PracticeQuestion } from './practiceQuestion';
 import type { SourceDetailSourceType } from './sourceDetailSourceType';
 import type { SourceDetailStatus } from './sourceDetailStatus';
 
@@ -26,6 +27,14 @@ export interface SourceDetail {
   errorMessage?: string | null;
   /** @nullable */
   summary?: string | null;
+  /**
+     * JSON string containing the mind map tree structure
+     * @nullable
+     */
+  mindMap?: string | null;
   createdAt: string;
+  flashcardCount: number;
+  knownCount: number;
   flashcards: Flashcard[];
+  questions: PracticeQuestion[];
 }

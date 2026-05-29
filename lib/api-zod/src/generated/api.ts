@@ -21,7 +21,7 @@ export const HealthCheckResponse = zod.object({
  */
 export const ListSourcesResponseItem = zod.object({
   "id": zod.number(),
-  "sourceType": zod.enum(['youtube', 'text']),
+  "sourceType": zod.enum(['youtube', 'text', 'pdf']),
   "youtubeUrl": zod.string().nullish(),
   "videoId": zod.string().nullish(),
   "title": zod.string(),
@@ -40,16 +40,16 @@ export const ListSourcesResponse = zod.array(ListSourcesResponseItem)
  * @summary Submit a YouTube URL or plain text for flashcard generation
  */
 export const CreateSourceBody = zod.object({
-  "sourceType": zod.enum(['youtube', 'text']),
+  "sourceType": zod.enum(['youtube', 'text', 'pdf']),
   "youtubeUrl": zod.string().nullish().describe('YouTube URL (required when sourceType is youtube)'),
-  "textTitle": zod.string().nullish().describe('Title for the text source (required when sourceType is text)'),
-  "textContent": zod.string().nullish().describe('Raw text content to generate flashcards from (required when sourceType is text)'),
-  "maxFlashcards": zod.number().nullish().describe('Maximum number of flashcards to generate (5-30, default 10)')
+  "textTitle": zod.string().nullish().describe('Title for the text\/pdf source (required when sourceType is text or pdf)'),
+  "textContent": zod.string().nullish().describe('Raw text content to generate study materials from (required when sourceType is text or pdf)'),
+  "maxFlashcards": zod.number().nullish().describe('Maximum number of flashcards to generate (5-100, default 10)')
 })
 
 
 /**
- * @summary Get a source with its summary and flashcards
+ * @summary Get a source with its summary, flashcards, mind map, and practice questions
  */
 export const GetSourceParams = zod.object({
   "id": zod.coerce.number()
@@ -57,7 +57,7 @@ export const GetSourceParams = zod.object({
 
 export const GetSourceResponse = zod.object({
   "id": zod.number(),
-  "sourceType": zod.enum(['youtube', 'text']),
+  "sourceType": zod.enum(['youtube', 'text', 'pdf']),
   "youtubeUrl": zod.string().nullish(),
   "videoId": zod.string().nullish(),
   "title": zod.string(),
@@ -66,7 +66,10 @@ export const GetSourceResponse = zod.object({
   "status": zod.enum(['pending', 'processing', 'done', 'error']),
   "errorMessage": zod.string().nullish(),
   "summary": zod.string().nullish(),
+  "mindMap": zod.string().nullish().describe('JSON string containing the mind map tree structure'),
   "createdAt": zod.string(),
+  "flashcardCount": zod.number(),
+  "knownCount": zod.number(),
   "flashcards": zod.array(zod.object({
   "id": zod.number(),
   "sourceId": zod.number(),
@@ -74,6 +77,15 @@ export const GetSourceResponse = zod.object({
   "answer": zod.string(),
   "known": zod.boolean(),
   "reviewCount": zod.number(),
+  "createdAt": zod.string()
+})),
+  "questions": zod.array(zod.object({
+  "id": zod.number(),
+  "sourceId": zod.number(),
+  "question": zod.string(),
+  "options": zod.array(zod.string()),
+  "correctIndex": zod.number(),
+  "explanation": zod.string(),
   "createdAt": zod.string()
 }))
 })

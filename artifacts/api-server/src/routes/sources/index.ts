@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, sql } from "drizzle-orm";
-import { db, sourcesTable, flashcardsTable } from "@workspace/db";
+import { db, sourcesTable, flashcardsTable, questionsTable } from "@workspace/db";
 import {
   CreateSourceBody,
   GetSourceParams,
@@ -14,7 +14,6 @@ import { processContent, extractVideoId } from "../../lib/processText";
 const router: IRouter = Router();
 
 async function fetchTranscript(videoId: string): Promise<string> {
-  // Dynamically import youtube-transcript (ESM compatible)
   const { YoutubeTranscript } = await import("youtube-transcript");
   const items = await YoutubeTranscript.fetchTranscript(videoId);
   return items.map((i: { text: string }) => i.text).join(" ");
@@ -38,6 +37,36 @@ async function fetchVideoMeta(videoId: string): Promise<{ title: string; thumbna
       thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
       channelName: "",
     };
+  }
+}
+
+async function saveProcessedContent(
+  sourceId: number,
+  result: Awaited<ReturnType<typeof processContent>>
+) {
+  const { summary, flashcards: cards, mindMap, practiceQuestions } = result;
+
+  await db
+    .update(sourcesTable)
+    .set({ summary, mindMap: JSON.stringify(mindMap), status: "done" })
+    .where(eq(sourcesTable.id, sourceId));
+
+  if (cards.length > 0) {
+    await db.insert(flashcardsTable).values(
+      cards.map((c) => ({ sourceId, question: c.question, answer: c.answer }))
+    );
+  }
+
+  if (practiceQuestions.length > 0) {
+    await db.insert(questionsTable).values(
+      practiceQuestions.map((q) => ({
+        sourceId,
+        question: q.question,
+        options: JSON.stringify(q.options),
+        correctIndex: q.correctIndex,
+        explanation: q.explanation,
+      }))
+    );
   }
 }
 
@@ -114,25 +143,20 @@ router.post("/sources", async (req, res): Promise<void> => {
       createdAt: source.createdAt.toISOString(),
     });
 
-    // Process async
     setImmediate(async () => {
       try {
         const [meta, transcript] = await Promise.all([
           fetchVideoMeta(videoId),
           fetchTranscript(videoId),
         ]);
-        const { summary, flashcards: cards } = await processContent(transcript, cardLimit);
+        const result = await processContent(transcript, cardLimit);
 
         await db
           .update(sourcesTable)
-          .set({ title: meta.title, thumbnail: meta.thumbnail, channelName: meta.channelName, summary, status: "done" })
+          .set({ title: meta.title, thumbnail: meta.thumbnail, channelName: meta.channelName })
           .where(eq(sourcesTable.id, source.id));
 
-        if (cards.length > 0) {
-          await db.insert(flashcardsTable).values(
-            cards.map((c) => ({ sourceId: source.id, question: c.question, answer: c.answer }))
-          );
-        }
+        await saveProcessedContent(source.id, result);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         const friendly = msg.includes("503") || msg.includes("UNAVAILABLE")
@@ -150,24 +174,16 @@ router.post("/sources", async (req, res): Promise<void> => {
     return;
   }
 
-  // Text source
+  // Text or PDF source
   if (!textTitle || !textContent) {
-    res.status(400).json({ error: "textTitle and textContent are required for text source" });
+    res.status(400).json({ error: "textTitle and textContent are required for text/pdf source" });
     return;
   }
 
-  const { summary, flashcards: cards } = await processContent(textContent, cardLimit);
-
   const [source] = await db
     .insert(sourcesTable)
-    .values({ sourceType: "text", title: textTitle, rawText: textContent, summary, status: "done" })
+    .values({ sourceType, title: textTitle, rawText: textContent, status: "processing" })
     .returning();
-
-  if (cards.length > 0) {
-    await db.insert(flashcardsTable).values(
-      cards.map((c) => ({ sourceId: source.id, question: c.question, answer: c.answer }))
-    );
-  }
 
   res.status(201).json({
     id: source.id,
@@ -179,9 +195,27 @@ router.post("/sources", async (req, res): Promise<void> => {
     channelName: source.channelName ?? null,
     status: source.status,
     errorMessage: source.errorMessage ?? null,
-    flashcardCount: cards.length,
+    flashcardCount: 0,
     knownCount: 0,
     createdAt: source.createdAt.toISOString(),
+  });
+
+  setImmediate(async () => {
+    try {
+      const result = await processContent(textContent, cardLimit);
+      await saveProcessedContent(source.id, result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const friendly = msg.includes("503") || msg.includes("UNAVAILABLE")
+        ? "Gemini is temporarily overloaded. Please retry in a moment."
+        : msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED")
+        ? "API rate limit reached. Please wait a minute before retrying."
+        : msg.slice(0, 200);
+      await db
+        .update(sourcesTable)
+        .set({ status: "error", errorMessage: friendly })
+        .where(eq(sourcesTable.id, source.id));
+    }
   });
 });
 
@@ -204,6 +238,14 @@ router.get("/sources/:id", async (req, res): Promise<void> => {
     .where(eq(flashcardsTable.sourceId, source.id))
     .orderBy(flashcardsTable.createdAt);
 
+  const qs = await db
+    .select()
+    .from(questionsTable)
+    .where(eq(questionsTable.sourceId, source.id))
+    .orderBy(questionsTable.createdAt);
+
+  const knownCount = cards.filter((c) => c.known).length;
+
   res.json(
     GetSourceResponse.parse({
       id: source.id,
@@ -216,6 +258,9 @@ router.get("/sources/:id", async (req, res): Promise<void> => {
       status: source.status,
       errorMessage: source.errorMessage ?? null,
       summary: source.summary ?? null,
+      mindMap: source.mindMap ?? null,
+      flashcardCount: cards.length,
+      knownCount,
       createdAt: source.createdAt.toISOString(),
       flashcards: cards.map((c) => ({
         id: c.id,
@@ -225,6 +270,15 @@ router.get("/sources/:id", async (req, res): Promise<void> => {
         known: c.known,
         reviewCount: c.reviewCount,
         createdAt: c.createdAt.toISOString(),
+      })),
+      questions: qs.map((q) => ({
+        id: q.id,
+        sourceId: q.sourceId,
+        question: q.question,
+        options: JSON.parse(q.options) as string[],
+        correctIndex: q.correctIndex,
+        explanation: q.explanation,
+        createdAt: q.createdAt.toISOString(),
       })),
     })
   );
@@ -247,7 +301,6 @@ router.post("/sources/:id/retry", async (req, res): Promise<void> => {
     return;
   }
 
-  // Reset to processing
   await db
     .update(sourcesTable)
     .set({ status: "processing", errorMessage: null })
@@ -255,11 +308,9 @@ router.post("/sources/:id/retry", async (req, res): Promise<void> => {
 
   res.json({ ok: true });
 
-  // Re-run processing async
   setImmediate(async () => {
     try {
-      let text: string;
-      const cardLimit = 10; // default on retry
+      const cardLimit = 10;
 
       if (source.sourceType === "youtube") {
         const videoId = source.videoId!;
@@ -267,32 +318,21 @@ router.post("/sources/:id/retry", async (req, res): Promise<void> => {
           fetchVideoMeta(videoId),
           fetchTranscript(videoId),
         ]);
-        text = transcript;
-        const { summary, flashcards: cards } = await processContent(text, cardLimit);
         await db
           .update(sourcesTable)
-          .set({ title: meta.title, thumbnail: meta.thumbnail, channelName: meta.channelName, summary, status: "done" })
+          .set({ title: meta.title, thumbnail: meta.thumbnail, channelName: meta.channelName })
           .where(eq(sourcesTable.id, source.id));
-        if (cards.length > 0) {
-          // Remove old cards first
-          await db.delete(flashcardsTable).where(eq(flashcardsTable.sourceId, source.id));
-          await db.insert(flashcardsTable).values(
-            cards.map((c) => ({ sourceId: source.id, question: c.question, answer: c.answer }))
-          );
-        }
+
+        await db.delete(flashcardsTable).where(eq(flashcardsTable.sourceId, source.id));
+        await db.delete(questionsTable).where(eq(questionsTable.sourceId, source.id));
+        const result = await processContent(transcript, cardLimit);
+        await saveProcessedContent(source.id, result);
       } else {
-        text = source.rawText ?? "";
-        const { summary, flashcards: cards } = await processContent(text, cardLimit);
-        await db
-          .update(sourcesTable)
-          .set({ summary, status: "done" })
-          .where(eq(sourcesTable.id, source.id));
-        if (cards.length > 0) {
-          await db.delete(flashcardsTable).where(eq(flashcardsTable.sourceId, source.id));
-          await db.insert(flashcardsTable).values(
-            cards.map((c) => ({ sourceId: source.id, question: c.question, answer: c.answer }))
-          );
-        }
+        const text = source.rawText ?? "";
+        await db.delete(flashcardsTable).where(eq(flashcardsTable.sourceId, source.id));
+        await db.delete(questionsTable).where(eq(questionsTable.sourceId, source.id));
+        const result = await processContent(text, cardLimit);
+        await saveProcessedContent(source.id, result);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

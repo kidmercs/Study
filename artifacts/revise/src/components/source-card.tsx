@@ -158,7 +158,7 @@ export function SourceCard({ source }: SourceCardProps) {
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction variant="destructive" onClick={handleDelete} disabled={deleteSource.isPending}>
+              <AlertDialogAction onClick={handleDelete} disabled={deleteSource.isPending} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                 {deleteSource.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete"}
               </AlertDialogAction>
             </AlertDialogFooter>

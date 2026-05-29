@@ -15,17 +15,17 @@ export interface SourceInput {
      */
   youtubeUrl?: string | null;
   /**
-     * Title for the text source (required when sourceType is text)
+     * Title for the text/pdf source (required when sourceType is text or pdf)
      * @nullable
      */
   textTitle?: string | null;
   /**
-     * Raw text content to generate flashcards from (required when sourceType is text)
+     * Raw text content to generate study materials from (required when sourceType is text or pdf)
      * @nullable
      */
   textContent?: string | null;
   /**
-     * Maximum number of flashcards to generate (5-30, default 10)
+     * Maximum number of flashcards to generate (5-100, default 10)
      * @nullable
      */
   maxFlashcards?: number | null;

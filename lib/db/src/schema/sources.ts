@@ -14,6 +14,7 @@ export const sourcesTable = pgTable("sources", {
   errorMessage: text("error_message"),
   summary: text("summary"),
   rawText: text("raw_text"),
+  mindMap: text("mind_map"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

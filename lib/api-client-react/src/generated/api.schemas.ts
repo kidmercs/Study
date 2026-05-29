@@ -15,6 +15,7 @@ export type SourceInputSourceType = typeof SourceInputSourceType[keyof typeof So
 export const SourceInputSourceType = {
   youtube: 'youtube',
   text: 'text',
+  pdf: 'pdf',
 } as const;
 
 export interface SourceInput {
@@ -25,17 +26,17 @@ export interface SourceInput {
      */
   youtubeUrl?: string | null;
   /**
-     * Title for the text source (required when sourceType is text)
+     * Title for the text/pdf source (required when sourceType is text or pdf)
      * @nullable
      */
   textTitle?: string | null;
   /**
-     * Raw text content to generate flashcards from (required when sourceType is text)
+     * Raw text content to generate study materials from (required when sourceType is text or pdf)
      * @nullable
      */
   textContent?: string | null;
   /**
-     * Maximum number of flashcards to generate (5-30, default 10)
+     * Maximum number of flashcards to generate (5-100, default 10)
      * @nullable
      */
   maxFlashcards?: number | null;
@@ -47,6 +48,7 @@ export type SourceSourceType = typeof SourceSourceType[keyof typeof SourceSource
 export const SourceSourceType = {
   youtube: 'youtube',
   text: 'text',
+  pdf: 'pdf',
 } as const;
 
 export type SourceStatus = typeof SourceStatus[keyof typeof SourceStatus];
@@ -85,6 +87,7 @@ export type SourceDetailSourceType = typeof SourceDetailSourceType[keyof typeof 
 export const SourceDetailSourceType = {
   youtube: 'youtube',
   text: 'text',
+  pdf: 'pdf',
 } as const;
 
 export type SourceDetailStatus = typeof SourceDetailStatus[keyof typeof SourceDetailStatus];
@@ -107,6 +110,16 @@ export interface Flashcard {
   createdAt: string;
 }
 
+export interface PracticeQuestion {
+  id: number;
+  sourceId: number;
+  question: string;
+  options: string[];
+  correctIndex: number;
+  explanation: string;
+  createdAt: string;
+}
+
 export interface SourceDetail {
   id: number;
   sourceType: SourceDetailSourceType;
@@ -124,8 +137,16 @@ export interface SourceDetail {
   errorMessage?: string | null;
   /** @nullable */
   summary?: string | null;
+  /**
+     * JSON string containing the mind map tree structure
+     * @nullable
+     */
+  mindMap?: string | null;
   createdAt: string;
+  flashcardCount: number;
+  knownCount: number;
   flashcards: Flashcard[];
+  questions: PracticeQuestion[];
 }
 
 export interface FlashcardReview {

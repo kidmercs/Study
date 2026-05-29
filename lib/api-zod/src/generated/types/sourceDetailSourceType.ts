@@ -12,4 +12,5 @@ export type SourceDetailSourceType = typeof SourceDetailSourceType[keyof typeof 
 export const SourceDetailSourceType = {
   youtube: 'youtube',
   text: 'text',
+  pdf: 'pdf',
 } as const;

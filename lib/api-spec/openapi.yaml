@@ -13,6 +13,8 @@ tags:
     description: Study source operations
   - name: flashcards
     description: Flashcard operations
+  - name: questions
+    description: Practice question operations
 paths:
   /healthz:
     get:
@@ -65,7 +67,7 @@ paths:
     get:
       operationId: getSource
       tags: [sources]
-      summary: Get a source with its summary and flashcards
+      summary: Get a source with its summary, flashcards, mind map, and practice questions
       parameters:
         - name: id
           in: path
@@ -154,16 +156,16 @@ components:
       properties:
         sourceType:
           type: string
-          enum: [youtube, text]
+          enum: [youtube, text, pdf]
         youtubeUrl:
           type: ["string", "null"]
           description: YouTube URL (required when sourceType is youtube)
         textTitle:
           type: ["string", "null"]
-          description: Title for the text source (required when sourceType is text)
+          description: Title for the text/pdf source (required when sourceType is text or pdf)
         textContent:
           type: ["string", "null"]
-          description: Raw text content to generate flashcards from (required when sourceType is text)
+          description: Raw text content to generate study materials from (required when sourceType is text or pdf)
         maxFlashcards:
           type: ["integer", "null"]
           description: Maximum number of flashcards to generate (5-100, default 10)
@@ -183,7 +185,7 @@ components:
           type: integer
         sourceType:
           type: string
-          enum: [youtube, text]
+          enum: [youtube, text, pdf]
         youtubeUrl:
           type: ["string", "null"]
         videoId:
@@ -215,12 +217,15 @@ components:
         - status
         - createdAt
         - flashcards
+        - questions
+        - flashcardCount
+        - knownCount
       properties:
         id:
           type: integer
         sourceType:
           type: string
-          enum: [youtube, text]
+          enum: [youtube, text, pdf]
         youtubeUrl:
           type: ["string", "null"]
         videoId:
@@ -238,12 +243,23 @@ components:
           type: ["string", "null"]
         summary:
           type: ["string", "null"]
+        mindMap:
+          type: ["string", "null"]
+          description: JSON string containing the mind map tree structure
         createdAt:
           type: string
+        flashcardCount:
+          type: integer
+        knownCount:
+          type: integer
         flashcards:
           type: array
           items:
             $ref: "#/components/schemas/Flashcard"
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeQuestion"
 
     Flashcard:
       type: object
@@ -278,6 +294,34 @@ components:
       properties:
         known:
           type: boolean
+
+    PracticeQuestion:
+      type: object
+      required:
+        - id
+        - sourceId
+        - question
+        - options
+        - correctIndex
+        - explanation
+        - createdAt
+      properties:
+        id:
+          type: integer
+        sourceId:
+          type: integer
+        question:
+          type: string
+        options:
+          type: array
+          items:
+            type: string
+        correctIndex:
+          type: integer
+        explanation:
+          type: string
+        createdAt:
+          type: string
 
     Stats:
       type: object

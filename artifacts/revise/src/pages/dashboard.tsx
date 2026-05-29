@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "wouter";
-import { useListSources, useGetStats } from "@workspace/api-client-react";
+import { useListSources, useGetStats, getListSourcesQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SourceCard } from "@/components/source-card";
@@ -12,6 +12,7 @@ export default function Dashboard() {
   
   const { data: sources, isLoading: sourcesLoading } = useListSources({
     query: {
+      queryKey: getListSourcesQueryKey(),
       refetchInterval: (query) => {
         const data = query.state.data;
         if (data && Array.isArray(data)) {
