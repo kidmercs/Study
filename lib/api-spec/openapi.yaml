@@ -156,7 +156,7 @@ components:
       properties:
         sourceType:
           type: string
-          enum: [youtube, text, pdf]
+          enum: [youtube, text, pdf, pastpaper]
         youtubeUrl:
           type: ["string", "null"]
           description: YouTube URL (required when sourceType is youtube)
@@ -181,6 +181,9 @@ components:
         generateQuiz:
           type: ["boolean", "null"]
           description: Whether to generate practice questions (default true)
+        generatePastPaper:
+          type: ["boolean", "null"]
+          description: Whether to extract past paper questions and mark scheme (default false)
 
     Source:
       type: object
@@ -197,7 +200,7 @@ components:
           type: integer
         sourceType:
           type: string
-          enum: [youtube, text, pdf]
+          enum: [youtube, text, pdf, pastpaper]
         youtubeUrl:
           type: ["string", "null"]
         videoId:
@@ -230,6 +233,7 @@ components:
         - createdAt
         - flashcards
         - questions
+        - pastPaperQuestions
         - flashcardCount
         - knownCount
       properties:
@@ -237,7 +241,7 @@ components:
           type: integer
         sourceType:
           type: string
-          enum: [youtube, text, pdf]
+          enum: [youtube, text, pdf, pastpaper]
         youtubeUrl:
           type: ["string", "null"]
         videoId:
@@ -272,6 +276,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PracticeQuestion"
+        pastPaperQuestions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PastPaperQuestion"
 
     Flashcard:
       type: object
@@ -332,6 +340,31 @@ components:
           type: integer
         explanation:
           type: string
+        createdAt:
+          type: string
+
+    PastPaperQuestion:
+      type: object
+      required:
+        - id
+        - sourceId
+        - questionNumber
+        - question
+        - markScheme
+        - createdAt
+      properties:
+        id:
+          type: integer
+        sourceId:
+          type: integer
+        questionNumber:
+          type: string
+        question:
+          type: string
+        markScheme:
+          type: string
+        marks:
+          type: ["integer", "null"]
         createdAt:
           type: string
 

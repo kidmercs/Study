@@ -49,4 +49,9 @@ export interface SourceInput {
      * @nullable
      */
   generateQuiz?: boolean | null;
+  /**
+     * Whether to extract past paper questions and mark scheme (default false)
+     * @nullable
+     */
+  generatePastPaper?: boolean | null;
 }

@@ -22,12 +22,21 @@ export interface ProcessedContent {
   flashcards: GeneratedFlashcard[];
   mindMap: MindMapNode | null;
   practiceQuestions: GeneratedQuestion[];
+  pastPaperQuestions: GeneratedPastPaperQuestion[];
+}
+
+export interface GeneratedPastPaperQuestion {
+  questionNumber: string;
+  question: string;
+  markScheme: string;
+  marks?: number;
 }
 
 export interface ProcessOptions {
   generateFlashcards?: boolean;
   generateMindMap?: boolean;
   generateQuiz?: boolean;
+  generatePastPaper?: boolean;
   maxFlashcards?: number;
   maxQuestions?: number;
 }
@@ -186,7 +195,7 @@ ${trimmed}
         }
       }
 
-      return { summary, flashcards, mindMap, practiceQuestions };
+      return { summary, flashcards, mindMap, practiceQuestions, pastPaperQuestions: [] };
     } catch (err) {
       lastErr = err;
       const msg = String(err instanceof Error ? err.message : err);
@@ -195,6 +204,84 @@ ${trimmed}
         msg.includes("429") ||
         msg.includes("UNAVAILABLE") ||
         msg.includes("RESOURCE_EXHAUSTED");
+      if (!isTransient) throw err;
+    }
+  }
+  throw lastErr;
+}
+
+export async function extractPastPaper(text: string): Promise<GeneratedPastPaperQuestion[]> {
+  const ai = getAI();
+  const trimmed = text.length > 40_000 ? text.slice(0, 40_000) + "…" : text;
+
+  const prompt = `You are an exam assistant. The text below is a past exam paper (it may or may not include a mark scheme).
+
+Your task is to return a JSON array of all exam questions found in the paper. For each question include:
+- "questionNumber": the question label as written (e.g. "1", "2a", "3(b)(ii)")
+- "question": the full question text, including any sub-question context needed to answer it. Preserve all line breaks and formatting as plain text.
+- "markScheme": a clear model answer / mark scheme for the question. If a mark scheme is included in the text, use it directly. Otherwise generate a thorough model answer.
+- "marks": the number of marks awarded for the question as an integer, or null if not stated.
+
+Rules:
+- Include ALL questions — do not skip sub-parts.
+- Keep question text complete and self-contained.
+- Mark scheme answers should be detailed enough for a student to self-mark.
+- Return ONLY a valid JSON array — no markdown, no code fences, no commentary.
+
+Text:
+"""
+${trimmed}
+"""`;
+
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt > 0) await sleep(Math.pow(2, attempt) * 1500);
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: { maxOutputTokens: 32768, responseMimeType: "application/json" },
+      });
+
+      const raw = (response.text ?? "").trim();
+      const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+      if (!cleaned) throw new Error("Gemini returned an empty response");
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(cleaned);
+      } catch {
+        throw new Error(`Gemini returned invalid JSON: ${cleaned.slice(0, 200)}`);
+      }
+
+      if (!Array.isArray(parsed)) throw new Error("Expected JSON array");
+
+      const questions: GeneratedPastPaperQuestion[] = [];
+      for (const item of parsed) {
+        if (
+          item &&
+          typeof item === "object" &&
+          typeof (item as Record<string, unknown>).questionNumber === "string" &&
+          typeof (item as Record<string, unknown>).question === "string" &&
+          typeof (item as Record<string, unknown>).markScheme === "string"
+        ) {
+          const q = item as Record<string, unknown>;
+          questions.push({
+            questionNumber: String(q.questionNumber).trim(),
+            question: String(q.question).trim(),
+            markScheme: String(q.markScheme).trim(),
+            marks: typeof q.marks === "number" ? Math.round(q.marks) : undefined,
+          });
+        }
+      }
+      return questions;
+    } catch (err) {
+      lastErr = err;
+      const msg = String(err instanceof Error ? err.message : err);
+      const isTransient =
+        msg.includes("503") || msg.includes("429") ||
+        msg.includes("UNAVAILABLE") || msg.includes("RESOURCE_EXHAUSTED");
       if (!isTransient) throw err;
     }
   }

@@ -21,7 +21,7 @@ export const HealthCheckResponse = zod.object({
  */
 export const ListSourcesResponseItem = zod.object({
   "id": zod.number(),
-  "sourceType": zod.enum(['youtube', 'text', 'pdf']),
+  "sourceType": zod.enum(['youtube', 'text', 'pdf', 'pastpaper']),
   "youtubeUrl": zod.string().nullish(),
   "videoId": zod.string().nullish(),
   "title": zod.string(),
@@ -40,7 +40,7 @@ export const ListSourcesResponse = zod.array(ListSourcesResponseItem)
  * @summary Submit a YouTube URL or plain text for flashcard generation
  */
 export const CreateSourceBody = zod.object({
-  "sourceType": zod.enum(['youtube', 'text', 'pdf']),
+  "sourceType": zod.enum(['youtube', 'text', 'pdf', 'pastpaper']),
   "youtubeUrl": zod.string().nullish().describe('YouTube URL (required when sourceType is youtube)'),
   "textTitle": zod.string().nullish().describe('Title for the text\/pdf source (required when sourceType is text or pdf)'),
   "textContent": zod.string().nullish().describe('Raw text content to generate study materials from (required when sourceType is text or pdf)'),
@@ -48,7 +48,8 @@ export const CreateSourceBody = zod.object({
   "maxQuestions": zod.number().nullish().describe('Number of practice questions to generate (3-20, default 5)'),
   "generateFlashcards": zod.boolean().nullish().describe('Whether to generate flashcards (default true)'),
   "generateMindMap": zod.boolean().nullish().describe('Whether to generate a mind map (default true)'),
-  "generateQuiz": zod.boolean().nullish().describe('Whether to generate practice questions (default true)')
+  "generateQuiz": zod.boolean().nullish().describe('Whether to generate practice questions (default true)'),
+  "generatePastPaper": zod.boolean().nullish().describe('Whether to extract past paper questions and mark scheme (default false)')
 })
 
 
@@ -61,7 +62,7 @@ export const GetSourceParams = zod.object({
 
 export const GetSourceResponse = zod.object({
   "id": zod.number(),
-  "sourceType": zod.enum(['youtube', 'text', 'pdf']),
+  "sourceType": zod.enum(['youtube', 'text', 'pdf', 'pastpaper']),
   "youtubeUrl": zod.string().nullish(),
   "videoId": zod.string().nullish(),
   "title": zod.string(),
@@ -90,6 +91,15 @@ export const GetSourceResponse = zod.object({
   "options": zod.array(zod.string()),
   "correctIndex": zod.number(),
   "explanation": zod.string(),
+  "createdAt": zod.string()
+})),
+  "pastPaperQuestions": zod.array(zod.object({
+  "id": zod.number(),
+  "sourceId": zod.number(),
+  "questionNumber": zod.string(),
+  "question": zod.string(),
+  "markScheme": zod.string(),
+  "marks": zod.number().nullish(),
   "createdAt": zod.string()
 }))
 })

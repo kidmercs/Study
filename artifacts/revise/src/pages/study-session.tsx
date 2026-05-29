@@ -5,19 +5,20 @@ import { useQueryClient } from "@tanstack/react-query";
 import { FlashcardView } from "@/components/flashcard-view";
 import { MindMapView } from "@/components/mind-map-view";
 import { PracticeQuestionsView } from "@/components/practice-questions-view";
+import { PastPaperView } from "@/components/past-paper-view";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ArrowLeft, BookOpen, ChevronDown, ChevronUp, Loader2, Layers, GitBranch, HelpCircle } from "lucide-react";
+import { ArrowLeft, BookOpen, ChevronDown, ChevronUp, Loader2, Layers, GitBranch, HelpCircle, ScrollText } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 
-type StudyMode = "flashcards" | "mindmap" | "questions";
+type StudyMode = "flashcards" | "mindmap" | "questions" | "pastpaper";
 
 export default function StudySession() {
   const params = useParams();
   const id = parseInt(params.id || "0", 10);
   const queryClient = useQueryClient();
   const [isSummaryOpen, setIsSummaryOpen] = React.useState(false);
-  const [studyMode, setStudyMode] = React.useState<StudyMode>("flashcards");
+  const [studyMode, setStudyMode] = React.useState<StudyMode | null>(null);
 
   const { data: source, isLoading, error } = useGetSource(id, {
     query: {
@@ -68,11 +69,19 @@ export default function StudySession() {
 
   const progress = source.flashcardCount > 0 ? (source.knownCount / source.flashcardCount) * 100 : 0;
 
+  const hasPastPaper = (source.pastPaperQuestions?.length ?? 0) > 0;
+
   const modes: { key: StudyMode; label: string; icon: React.ReactNode }[] = [
-    { key: "flashcards", label: "Flashcards", icon: <Layers className="w-4 h-4" /> },
-    { key: "mindmap", label: "Mind Map", icon: <GitBranch className="w-4 h-4" /> },
-    { key: "questions", label: "Practice Quiz", icon: <HelpCircle className="w-4 h-4" /> },
+    ...(source.flashcards?.length > 0 ? [{ key: "flashcards" as const, label: "Flashcards", icon: <Layers className="w-4 h-4" /> }] : []),
+    ...(source.mindMap ? [{ key: "mindmap" as const, label: "Mind Map", icon: <GitBranch className="w-4 h-4" /> }] : []),
+    ...(source.questions?.length > 0 ? [{ key: "questions" as const, label: "Practice Quiz", icon: <HelpCircle className="w-4 h-4" /> }] : []),
+    ...(hasPastPaper ? [{ key: "pastpaper" as const, label: "Past Paper", icon: <ScrollText className="w-4 h-4" /> }] : []),
   ];
+
+  const defaultMode: StudyMode = hasPastPaper && source.flashcards?.length === 0 ? "pastpaper"
+    : source.flashcards?.length > 0 ? "flashcards"
+    : source.questions?.length > 0 ? "questions"
+    : "pastpaper";
 
   return (
     <div className="min-h-screen pb-20">
@@ -112,6 +121,11 @@ export default function StudySession() {
               PDF
             </span>
           )}
+          {source.sourceType === "pastpaper" && (
+            <span className="inline-block px-3 py-1 bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400 rounded-full text-xs font-semibold mb-4 tracking-wide uppercase">
+              Past Paper
+            </span>
+          )}
           <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-4 text-foreground balance">{source.title}</h1>
           {source.channelName && (
             <p className="text-lg text-muted-foreground">{source.channelName}</p>
@@ -144,39 +158,47 @@ export default function StudySession() {
         )}
 
         {/* Study Mode Tabs */}
-        <div className="flex justify-center mb-10">
-          <div className="inline-flex bg-muted/50 rounded-xl p-1 gap-1 border">
-            {modes.map(({ key, label, icon }) => (
-              <button
-                key={key}
-                onClick={() => setStudyMode(key)}
-                className={[
-                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
-                  studyMode === key
-                    ? "bg-background text-foreground shadow-sm border border-border/60"
-                    : "text-muted-foreground hover:text-foreground",
-                ].join(" ")}
-              >
-                {icon}
-                {label}
-              </button>
-            ))}
+        {modes.length > 1 && (
+          <div className="flex justify-center mb-10">
+            <div className="inline-flex bg-muted/50 rounded-xl p-1 gap-1 border flex-wrap justify-center">
+              {modes.map(({ key, label, icon }) => {
+                const active = (studyMode ?? defaultMode) === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setStudyMode(key)}
+                    className={[
+                      "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
+                      active
+                        ? "bg-background text-foreground shadow-sm border border-border/60"
+                        : "text-muted-foreground hover:text-foreground",
+                    ].join(" ")}
+                  >
+                    {icon}
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="mt-4">
-          {studyMode === "flashcards" && (
+          {(studyMode ?? defaultMode) === "flashcards" && (
             <FlashcardView
               cards={source.flashcards || []}
               onReview={handleReview}
               isReviewing={reviewMutation.isPending}
             />
           )}
-          {studyMode === "mindmap" && (
+          {(studyMode ?? defaultMode) === "mindmap" && (
             <MindMapView mindMapJson={source.mindMap ?? null} />
           )}
-          {studyMode === "questions" && (
+          {(studyMode ?? defaultMode) === "questions" && (
             <PracticeQuestionsView questions={source.questions || []} />
+          )}
+          {(studyMode ?? defaultMode) === "pastpaper" && (
+            <PastPaperView questions={source.pastPaperQuestions || []} />
           )}
         </div>
       </main>

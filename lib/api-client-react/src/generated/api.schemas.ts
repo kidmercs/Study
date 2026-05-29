@@ -16,6 +16,7 @@ export const SourceInputSourceType = {
   youtube: 'youtube',
   text: 'text',
   pdf: 'pdf',
+  pastpaper: 'pastpaper',
 } as const;
 
 export interface SourceInput {
@@ -60,6 +61,11 @@ export interface SourceInput {
      * @nullable
      */
   generateQuiz?: boolean | null;
+  /**
+     * Whether to extract past paper questions and mark scheme (default false)
+     * @nullable
+     */
+  generatePastPaper?: boolean | null;
 }
 
 export type SourceSourceType = typeof SourceSourceType[keyof typeof SourceSourceType];
@@ -69,6 +75,7 @@ export const SourceSourceType = {
   youtube: 'youtube',
   text: 'text',
   pdf: 'pdf',
+  pastpaper: 'pastpaper',
 } as const;
 
 export type SourceStatus = typeof SourceStatus[keyof typeof SourceStatus];
@@ -108,6 +115,7 @@ export const SourceDetailSourceType = {
   youtube: 'youtube',
   text: 'text',
   pdf: 'pdf',
+  pastpaper: 'pastpaper',
 } as const;
 
 export type SourceDetailStatus = typeof SourceDetailStatus[keyof typeof SourceDetailStatus];
@@ -140,6 +148,17 @@ export interface PracticeQuestion {
   createdAt: string;
 }
 
+export interface PastPaperQuestion {
+  id: number;
+  sourceId: number;
+  questionNumber: string;
+  question: string;
+  markScheme: string;
+  /** @nullable */
+  marks?: number | null;
+  createdAt: string;
+}
+
 export interface SourceDetail {
   id: number;
   sourceType: SourceDetailSourceType;
@@ -167,6 +186,7 @@ export interface SourceDetail {
   knownCount: number;
   flashcards: Flashcard[];
   questions: PracticeQuestion[];
+  pastPaperQuestions: PastPaperQuestion[];
 }
 
 export interface FlashcardReview {

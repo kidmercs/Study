@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, sql } from "drizzle-orm";
-import { db, sourcesTable, flashcardsTable, questionsTable } from "@workspace/db";
+import { db, sourcesTable, flashcardsTable, questionsTable, pastPaperQuestionsTable } from "@workspace/db";
 import {
   CreateSourceBody,
   GetSourceParams,
@@ -9,7 +9,7 @@ import {
   ListSourcesResponse,
   GetStatsResponse,
 } from "@workspace/api-zod";
-import { processContent, extractVideoId } from "../../lib/processText";
+import { processContent, extractVideoId, extractPastPaper } from "../../lib/processText";
 
 const router: IRouter = Router();
 
@@ -65,6 +65,25 @@ async function saveProcessedContent(
         options: JSON.stringify(q.options),
         correctIndex: q.correctIndex,
         explanation: q.explanation,
+      }))
+    );
+  }
+}
+
+async function savePastPaperContent(sourceId: number, title: string, questions: Awaited<ReturnType<typeof extractPastPaper>>) {
+  await db
+    .update(sourcesTable)
+    .set({ title, status: "done" })
+    .where(eq(sourcesTable.id, sourceId));
+
+  if (questions.length > 0) {
+    await db.insert(pastPaperQuestionsTable).values(
+      questions.map((q) => ({
+        sourceId,
+        questionNumber: q.questionNumber,
+        question: q.question,
+        markScheme: q.markScheme,
+        marks: q.marks ?? null,
       }))
     );
   }
@@ -180,6 +199,54 @@ router.post("/sources", async (req, res): Promise<void> => {
     return;
   }
 
+  // Past paper source
+  if (sourceType === "pastpaper") {
+    if (!textTitle || !textContent) {
+      res.status(400).json({ error: "textTitle and textContent are required for past paper source" });
+      return;
+    }
+
+    const [source] = await db
+      .insert(sourcesTable)
+      .values({ sourceType: "pastpaper", title: textTitle, rawText: textContent, status: "processing" })
+      .returning();
+
+    res.status(201).json({
+      id: source.id,
+      sourceType: source.sourceType,
+      youtubeUrl: null,
+      videoId: null,
+      title: source.title,
+      thumbnail: null,
+      channelName: null,
+      status: source.status,
+      errorMessage: null,
+      flashcardCount: 0,
+      knownCount: 0,
+      createdAt: source.createdAt.toISOString(),
+    });
+
+    setImmediate(async () => {
+      try {
+        const questions = await extractPastPaper(textContent);
+        await savePastPaperContent(source.id, textTitle, questions);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const friendly = msg.includes("503") || msg.includes("UNAVAILABLE")
+          ? "Gemini is temporarily overloaded. Please retry in a moment."
+          : msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED")
+          ? "API rate limit reached. Please wait a minute before retrying."
+          : msg.slice(0, 200);
+        await db
+          .update(sourcesTable)
+          .set({ status: "error", errorMessage: friendly })
+          .where(eq(sourcesTable.id, source.id));
+      }
+    });
+
+    return;
+  }
+
   // Text or PDF source
   if (!textTitle || !textContent) {
     res.status(400).json({ error: "textTitle and textContent are required for text/pdf source" });
@@ -250,6 +317,12 @@ router.get("/sources/:id", async (req, res): Promise<void> => {
     .where(eq(questionsTable.sourceId, source.id))
     .orderBy(questionsTable.createdAt);
 
+  const ppqs = await db
+    .select()
+    .from(pastPaperQuestionsTable)
+    .where(eq(pastPaperQuestionsTable.sourceId, source.id))
+    .orderBy(pastPaperQuestionsTable.createdAt);
+
   const knownCount = cards.filter((c) => c.known).length;
 
   res.json(
@@ -284,6 +357,15 @@ router.get("/sources/:id", async (req, res): Promise<void> => {
         options: JSON.parse(q.options) as string[],
         correctIndex: q.correctIndex,
         explanation: q.explanation,
+        createdAt: q.createdAt.toISOString(),
+      })),
+      pastPaperQuestions: ppqs.map((q) => ({
+        id: q.id,
+        sourceId: q.sourceId,
+        questionNumber: q.questionNumber,
+        question: q.question,
+        markScheme: q.markScheme,
+        marks: q.marks ?? null,
         createdAt: q.createdAt.toISOString(),
       })),
     })

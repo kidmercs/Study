@@ -24,7 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Link2, FileText, Loader2, FileUp, CreditCard, Network, HelpCircle } from "lucide-react";
+import { Link2, FileText, Loader2, FileUp, CreditCard, Network, HelpCircle, ScrollText } from "lucide-react";
 
 const youtubeSchema = z.object({
   youtubeUrl: z.string().url({ message: "Please enter a valid URL." }).min(1, "Required"),
@@ -42,6 +42,11 @@ const textSchema = z.object({
 const pdfSchema = z.object({
   maxFlashcards: z.number().min(5).max(100),
   maxQuestions: z.number().min(3).max(20),
+});
+
+const pastPaperTextSchema = z.object({
+  paperTitle: z.string().min(1, "Title is required").max(150),
+  paperContent: z.string().min(20, "Please paste the paper content (at least 20 characters)"),
 });
 
 interface StudyModes {
@@ -159,11 +164,14 @@ async function extractPdfText(file: File): Promise<string> {
 
 export function AddSourceDialog({ children }: AddSourceDialogProps) {
   const [open, setOpen] = React.useState(false);
-  const [tab, setTab] = React.useState<"youtube" | "text" | "pdf">("youtube");
+  const [tab, setTab] = React.useState<"youtube" | "text" | "pdf" | "pastpaper">("youtube");
   const [pdfFile, setPdfFile] = React.useState<File | null>(null);
   const [isExtractingPdf, setIsExtractingPdf] = React.useState(false);
+  const [ppPdfFile, setPpPdfFile] = React.useState<File | null>(null);
+  const [isExtractingPpPdf, setIsExtractingPpPdf] = React.useState(false);
   const [modes, setModes] = React.useState<StudyModes>({ flashcards: true, mindMap: true, quiz: true });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const ppFileInputRef = useRef<HTMLInputElement>(null);
   const createSource = useCreateSource();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -181,6 +189,11 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
   const pdfForm = useForm<z.infer<typeof pdfSchema>>({
     resolver: zodResolver(pdfSchema),
     defaultValues: { maxFlashcards: 10, maxQuestions: 5 },
+  });
+
+  const pastPaperTextForm = useForm<z.infer<typeof pastPaperTextSchema>>({
+    resolver: zodResolver(pastPaperTextSchema),
+    defaultValues: { paperTitle: "", paperContent: "" },
   });
 
   const buildModeData = (flashcards: number, questions: number) => ({
@@ -279,7 +292,77 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
     }
   };
 
-  const isPending = createSource.isPending || isExtractingPdf;
+  const onSubmitPastPaperText = (values: z.infer<typeof pastPaperTextSchema>) => {
+    createSource.mutate(
+      {
+        data: {
+          sourceType: "pastpaper",
+          textTitle: values.paperTitle,
+          textContent: values.paperContent,
+          generateFlashcards: false,
+          generateMindMap: false,
+          generateQuiz: false,
+          generatePastPaper: true,
+        },
+      },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey() });
+          setOpen(false);
+          pastPaperTextForm.reset();
+          toast({ title: "Past paper added", description: "Extracting questions and mark scheme..." });
+        },
+        onError: () => {
+          toast({ title: "Error", description: "Failed to add past paper.", variant: "destructive" });
+        },
+      }
+    );
+  };
+
+  const onSubmitPastPaperPdf = async () => {
+    if (!ppPdfFile) {
+      toast({ title: "No file selected", description: "Please choose a PDF file.", variant: "destructive" });
+      return;
+    }
+    setIsExtractingPpPdf(true);
+    try {
+      const text = await extractPdfText(ppPdfFile);
+      if (!text.trim()) {
+        toast({ title: "Could not read PDF", description: "The PDF appears to have no extractable text.", variant: "destructive" });
+        return;
+      }
+      createSource.mutate(
+        {
+          data: {
+            sourceType: "pastpaper",
+            textTitle: ppPdfFile.name.replace(/\.pdf$/i, ""),
+            textContent: text,
+            generateFlashcards: false,
+            generateMindMap: false,
+            generateQuiz: false,
+            generatePastPaper: true,
+          },
+        },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey() });
+            setOpen(false);
+            setPpPdfFile(null);
+            toast({ title: "Past paper added", description: "Extracting questions and mark scheme..." });
+          },
+          onError: () => {
+            toast({ title: "Error", description: "Failed to add past paper.", variant: "destructive" });
+          },
+        }
+      );
+    } catch {
+      toast({ title: "Error reading PDF", description: "Could not extract text from this file.", variant: "destructive" });
+    } finally {
+      setIsExtractingPpPdf(false);
+    }
+  };
+
+  const isPending = createSource.isPending || isExtractingPdf || isExtractingPpPdf;
 
   const renderModeOptions = (flashcardsField: React.ReactNode, questionsField: React.ReactNode) => (
     <div className="space-y-4">
@@ -299,18 +382,22 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
           <DialogTitle>Add a new study source</DialogTitle>
         </DialogHeader>
         <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="mt-2">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="youtube" data-testid="tab-youtube">
-              <Link2 className="w-4 h-4 mr-1.5" />
+              <Link2 className="w-3.5 h-3.5 mr-1" />
               YouTube
             </TabsTrigger>
             <TabsTrigger value="text" data-testid="tab-text">
-              <FileText className="w-4 h-4 mr-1.5" />
+              <FileText className="w-3.5 h-3.5 mr-1" />
               Text
             </TabsTrigger>
             <TabsTrigger value="pdf" data-testid="tab-pdf">
-              <FileUp className="w-4 h-4 mr-1.5" />
+              <FileUp className="w-3.5 h-3.5 mr-1" />
               PDF
+            </TabsTrigger>
+            <TabsTrigger value="pastpaper" data-testid="tab-pastpaper">
+              <ScrollText className="w-3.5 h-3.5 mr-1" />
+              Past Paper
             </TabsTrigger>
           </TabsList>
 
@@ -495,6 +582,106 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
                 </div>
               </form>
             </Form>
+          </TabsContent>
+          <TabsContent value="pastpaper">
+            <div className="space-y-4 pt-4">
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Paste your past paper as text or upload a PDF. The AI will extract every question and generate a mark scheme.
+              </p>
+
+              {/* Sub-tabs: Text vs PDF */}
+              <Tabs defaultValue="pptext" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 mb-4">
+                  <TabsTrigger value="pptext">
+                    <FileText className="w-3.5 h-3.5 mr-1.5" />
+                    Paste Text
+                  </TabsTrigger>
+                  <TabsTrigger value="pppdf">
+                    <FileUp className="w-3.5 h-3.5 mr-1.5" />
+                    Upload PDF
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="pptext">
+                  <Form {...pastPaperTextForm}>
+                    <form onSubmit={pastPaperTextForm.handleSubmit(onSubmitPastPaperText)} className="space-y-4">
+                      <FormField
+                        control={pastPaperTextForm.control}
+                        name="paperTitle"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Paper Title</FormLabel>
+                            <FormControl>
+                              <Input placeholder="E.g., Biology Unit 2 June 2023" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={pastPaperTextForm.control}
+                        name="paperContent"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Paper Content</FormLabel>
+                            <FormControl>
+                              <Textarea
+                                placeholder="Paste the full text of the past paper here..."
+                                className="min-h-[130px] resize-none"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <div className="flex justify-end">
+                        <Button type="submit" disabled={isPending}>
+                          {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                          Extract Questions
+                        </Button>
+                      </div>
+                    </form>
+                  </Form>
+                </TabsContent>
+
+                <TabsContent value="pppdf">
+                  <div className="space-y-4">
+                    <div
+                      className="border-2 border-dashed border-border rounded-xl p-6 text-center cursor-pointer hover:border-primary/60 hover:bg-muted/30 transition-colors"
+                      onClick={() => ppFileInputRef.current?.click()}
+                    >
+                      <input
+                        ref={ppFileInputRef}
+                        type="file"
+                        accept=".pdf,application/pdf"
+                        className="hidden"
+                        onChange={(e) => setPpPdfFile(e.target.files?.[0] ?? null)}
+                      />
+                      {ppPdfFile ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <FileUp className="w-8 h-8 text-primary" />
+                          <p className="text-sm font-medium text-foreground truncate max-w-full">{ppPdfFile.name}</p>
+                          <p className="text-xs text-muted-foreground">{(ppPdfFile.size / 1024 / 1024).toFixed(1)} MB — click to change</p>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-2">
+                          <FileUp className="w-8 h-8 text-muted-foreground" />
+                          <p className="text-sm text-muted-foreground">Click to upload the past paper PDF</p>
+                          <p className="text-xs text-muted-foreground/60">Supports text-based PDFs</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex justify-end">
+                      <Button onClick={onSubmitPastPaperPdf} disabled={isPending || !ppPdfFile} type="button">
+                        {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                        {isExtractingPpPdf ? "Reading PDF..." : "Extract Questions"}
+                      </Button>
+                    </div>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </div>
           </TabsContent>
         </Tabs>
       </DialogContent>

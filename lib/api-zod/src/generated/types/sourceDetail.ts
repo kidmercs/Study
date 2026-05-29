@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Flashcard } from './flashcard';
+import type { PastPaperQuestion } from './pastPaperQuestion';
 import type { PracticeQuestion } from './practiceQuestion';
 import type { SourceDetailSourceType } from './sourceDetailSourceType';
 import type { SourceDetailStatus } from './sourceDetailStatus';
@@ -37,4 +38,5 @@ export interface SourceDetail {
   knownCount: number;
   flashcards: Flashcard[];
   questions: PracticeQuestion[];
+  pastPaperQuestions: PastPaperQuestion[];
 }

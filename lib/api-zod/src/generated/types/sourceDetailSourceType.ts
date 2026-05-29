@@ -13,4 +13,5 @@ export const SourceDetailSourceType = {
   youtube: 'youtube',
   text: 'text',
   pdf: 'pdf',
+  pastpaper: 'pastpaper',
 } as const;
