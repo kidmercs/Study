@@ -9,7 +9,7 @@ import {
   ListSourcesResponse,
   GetStatsResponse,
 } from "@workspace/api-zod";
-import { generateSummary, generateFlashcards, extractVideoId } from "../../lib/processText";
+import { processContent, extractVideoId } from "../../lib/processText";
 
 const router: IRouter = Router();
 
@@ -121,8 +121,7 @@ router.post("/sources", async (req, res): Promise<void> => {
           fetchVideoMeta(videoId),
           fetchTranscript(videoId),
         ]);
-        const summary = generateSummary(transcript);
-        const cards = generateFlashcards(transcript, cardLimit);
+        const { summary, flashcards: cards } = await processContent(transcript, cardLimit);
 
         await db
           .update(sourcesTable)
@@ -152,8 +151,7 @@ router.post("/sources", async (req, res): Promise<void> => {
     return;
   }
 
-  const summary = generateSummary(textContent);
-  const cards = generateFlashcards(textContent, cardLimit);
+  const { summary, flashcards: cards } = await processContent(textContent, cardLimit);
 
   const [source] = await db
     .insert(sourcesTable)

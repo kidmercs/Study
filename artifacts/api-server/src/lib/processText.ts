@@ -1,10 +1,105 @@
+import { GoogleGenAI } from "@google/genai";
+
 export interface GeneratedFlashcard {
   question: string;
   answer: string;
 }
 
+export interface ProcessedContent {
+  summary: string;
+  flashcards: GeneratedFlashcard[];
+}
+
 // ---------------------------------------------------------------------------
-// Helpers
+// Gemini client (lazy — only initialised when called)
+// ---------------------------------------------------------------------------
+
+function getAI(): GoogleGenAI {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
+  return new GoogleGenAI({ apiKey });
+}
+
+// ---------------------------------------------------------------------------
+// Gemini-powered processing (single call for both summary + flashcards)
+// ---------------------------------------------------------------------------
+
+async function processWithGemini(
+  text: string,
+  maxCards: number
+): Promise<ProcessedContent> {
+  const ai = getAI();
+
+  // Trim very long texts to avoid exceeding free-tier input limits
+  const trimmed = text.length > 30_000 ? text.slice(0, 30_000) + "…" : text;
+
+  const prompt = `You are a study assistant. Analyse the text below and return a JSON object with two keys:
+
+1. "summary": A clear, well-written paragraph (4–6 sentences) summarising the main ideas.
+2. "flashcards": An array of exactly ${maxCards} high-quality study flashcards.
+
+Flashcard rules:
+- Each card must have a "question" and an "answer".
+- Questions must be self-contained and specific (not "What does it say about X?" but "What is X?").
+- Answers must be complete, accurate sentences — not fragments.
+- Cover the most important facts, definitions, cause-and-effect relationships, and key terms.
+- No duplicate topics. No trivially obvious questions.
+- If the text is too short to produce ${maxCards} distinct cards, produce as many good ones as possible.
+
+Return ONLY valid JSON — no markdown fences, no commentary.
+
+Text:
+"""
+${trimmed}
+"""`;
+
+  const response = await ai.models.generateContent({
+    model: "gemini-2.0-flash",
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    config: {
+      maxOutputTokens: 8192,
+      responseMimeType: "application/json",
+    },
+  });
+
+  const raw = response.text ?? "";
+
+  // Strip any accidental markdown fences just in case
+  const cleaned = raw.replace(/^```(?:json)?\n?/i, "").replace(/```\s*$/i, "").trim();
+
+  let parsed: { summary?: string; flashcards?: unknown[] };
+  try {
+    parsed = JSON.parse(cleaned) as { summary?: string; flashcards?: unknown[] };
+  } catch {
+    throw new Error(`Gemini returned non-JSON: ${raw.slice(0, 200)}`);
+  }
+
+  const summary = typeof parsed.summary === "string" ? parsed.summary.trim() : "";
+
+  const flashcards: GeneratedFlashcard[] = [];
+  if (Array.isArray(parsed.flashcards)) {
+    for (const item of parsed.flashcards) {
+      if (
+        item &&
+        typeof item === "object" &&
+        "question" in item &&
+        "answer" in item &&
+        typeof (item as Record<string, unknown>).question === "string" &&
+        typeof (item as Record<string, unknown>).answer === "string"
+      ) {
+        flashcards.push({
+          question: String((item as Record<string, unknown>).question).trim(),
+          answer: String((item as Record<string, unknown>).answer).trim(),
+        });
+      }
+    }
+  }
+
+  return { summary, flashcards };
+}
+
+// ---------------------------------------------------------------------------
+// Algorithmic fallback (used when Gemini is unavailable)
 // ---------------------------------------------------------------------------
 
 function sentences(text: string): string[] {
@@ -16,19 +111,17 @@ function words(text: string): string[] {
 }
 
 const STOP_WORDS = new Set([
-  "the", "and", "for", "are", "but", "not", "you", "all", "can", "had",
-  "her", "was", "one", "our", "out", "day", "get", "has", "him", "his",
-  "how", "its", "may", "new", "now", "old", "see", "two", "way", "who",
-  "boy", "did", "its", "let", "put", "say", "she", "too", "use", "that",
-  "this", "with", "have", "from", "they", "been", "were", "will", "would",
-  "could", "should", "there", "their", "then", "than", "when", "what",
-  "which", "also", "some", "your", "about", "just", "more", "into", "like",
-  "very", "because", "being", "these", "those", "such", "each", "both",
-  "does", "made", "make", "many", "more", "most", "over", "said", "same",
-  "than", "them", "then", "time", "under", "well", "were", "what", "when",
-  "where", "which", "while", "with", "within", "without", "used", "using",
-  "called", "known", "often", "also", "even", "still", "first", "second",
-  "third", "between", "through", "during", "before", "after", "since",
+  "the", "and", "for", "are", "but", "not", "you", "all", "can", "had", "her",
+  "was", "one", "our", "out", "day", "get", "has", "him", "his", "how", "its",
+  "may", "new", "now", "old", "see", "two", "way", "who", "did", "let", "put",
+  "say", "she", "too", "use", "that", "this", "with", "have", "from", "they",
+  "been", "were", "will", "would", "could", "should", "there", "their", "then",
+  "than", "when", "what", "which", "also", "some", "your", "about", "just",
+  "more", "into", "like", "very", "because", "being", "these", "those", "such",
+  "each", "both", "does", "made", "make", "many", "most", "over", "said",
+  "same", "them", "time", "under", "well", "used", "using", "called", "known",
+  "often", "even", "still", "first", "second", "third", "between", "through",
+  "during", "before", "after", "since",
 ]);
 
 function termFrequency(text: string): Map<string, number> {
@@ -45,224 +138,80 @@ function sentenceScore(sentence: string, freq: Map<string, number>): number {
   return ws.reduce((sum, w) => sum + (freq.get(w) ?? 0), 0) / ws.length;
 }
 
-function clean(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
-}
-
-function deduplicate(cards: GeneratedFlashcard[]): GeneratedFlashcard[] {
-  const seen = new Set<string>();
-  return cards.filter((c) => {
-    const key = c.question.toLowerCase().replace(/\W/g, "").slice(0, 60);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-function capitalise(s: string): string {
-  return s.length === 0 ? s : s[0].toUpperCase() + s.slice(1);
-}
-
-// ---------------------------------------------------------------------------
-// Pattern extractors
-// ---------------------------------------------------------------------------
-
-/** "X is/are/was/means/refers to Y" → What is X? */
-function extractDefinitions(text: string): GeneratedFlashcard[] {
-  const cards: GeneratedFlashcard[] = [];
-  const pattern =
-    /([A-Z][a-zA-Z\s]{2,40}?)\s+(?:is|are|was|were|is defined as|are defined as|means|refers to|can be defined as|is known as)\s+([^.!?\n]{20,150})[.!?]/g;
-  let m: RegExpExecArray | null;
-  while ((m = pattern.exec(text)) !== null) {
-    const term = clean(m[1]);
-    const def = clean(m[2]);
-    // Skip if term is too long (likely not a real term) or looks like a sentence fragment
-    if (term.split(/\s+/).length > 6) continue;
-    if (/^(this|that|it|he|she|they|we|you|there|here)$/i.test(term.split(/\s+/)[0])) continue;
-    cards.push({
-      question: `What is ${term}?`,
-      answer: capitalise(def) + ".",
-    });
-  }
-  return cards;
-}
-
-/** "X causes/leads to/results in/produces Y" → What does X lead to? */
-function extractCauseEffect(text: string): GeneratedFlashcard[] {
-  const cards: GeneratedFlashcard[] = [];
-  const causePattern =
-    /([^.!?]{10,80}?)\s+(?:causes?|leads? to|results? in|produces?|triggers?|brings? about)\s+([^.!?]{10,100})[.!?]/gi;
-  let m: RegExpExecArray | null;
-  while ((m = causePattern.exec(text)) !== null) {
-    const cause = clean(m[1]);
-    const effect = clean(m[2]);
-    if (cause.split(/\s+/).length < 2 || effect.split(/\s+/).length < 2) continue;
-    cards.push({
-      question: `What does "${capitalise(cause)}" lead to?`,
-      answer: capitalise(effect) + ".",
-    });
-  }
-  return cards;
-}
-
-/** Sentences with explicit numbers/quantities → numerical fact cards */
-function extractNumericalFacts(text: string): GeneratedFlashcard[] {
-  const cards: GeneratedFlashcard[] = [];
-  // Match sentences containing digits or number words
-  const numPattern = /\b(\d[\d,.]*)(?:\s*(?:percent|%|million|billion|thousand|km|kg|m|cm|mph|°C|°F|years?|months?|days?|hours?|seconds?|meters?|litres?|calories?))?\b/;
+function algorithmicProcess(text: string, maxCards: number): ProcessedContent {
+  const freq = termFrequency(text);
   const sents = sentences(text);
-  for (const s of sents) {
-    if (!numPattern.test(s)) continue;
-    if (s.length > 250) continue;
-    // Extract the numeric focus
-    const numMatch = s.match(/\b(\d[\d,.]*\s*(?:percent|%|million|billion|thousand|km|kg|mph)?)\b/);
-    if (!numMatch) continue;
-    const num = numMatch[1].trim();
-    const withoutNum = s.replace(numMatch[0], "______").replace(/[.!?]$/, "");
-    if (withoutNum.length < 20) continue;
-    cards.push({
-      question: `Fill in the blank: "${withoutNum}"`,
-      answer: num,
-    });
-  }
-  return cards;
-}
 
-/** "Unlike X, Y..." / "X differs from Y in that..." */
-function extractComparisons(text: string): GeneratedFlashcard[] {
-  const cards: GeneratedFlashcard[] = [];
-  const pattern =
-    /(?:unlike|in contrast to|compared to|while)\s+([^,]{5,50}),\s+([^.!?]{15,120})[.!?]/gi;
-  let m: RegExpExecArray | null;
-  while ((m = pattern.exec(text)) !== null) {
-    const a = clean(m[1]);
-    const b = clean(m[2]);
-    cards.push({
-      question: `How does the text contrast "${capitalise(a)}" with something else?`,
-      answer: capitalise(b) + ".",
-    });
-  }
-  return cards;
-}
-
-/** "There are N types/steps/stages/kinds of X" → list the types */
-function extractLists(text: string): GeneratedFlashcard[] {
-  const cards: GeneratedFlashcard[] = [];
-  const pattern =
-    /(?:there are|includes?|consists? of|comprises?)\s+(?:\d+\s+)?(?:main\s+|key\s+|important\s+)?(?:types?|stages?|steps?|kinds?|categories?|components?|parts?|elements?|factors?)\s+of\s+([^.!?:]{5,60})[.!?:]/gi;
-  let m: RegExpExecArray | null;
-  while ((m = pattern.exec(text)) !== null) {
-    const topic = clean(m[1]);
-    // Find the rest of the surrounding text as the answer
-    const startIdx = m.index;
-    const surrounding = text.slice(startIdx, startIdx + 300).split(/[.!?]/)[0];
-    if (surrounding.length < 20) continue;
-    cards.push({
-      question: `What are the main components or types of ${topic}?`,
-      answer: capitalise(clean(surrounding)) + ".",
-    });
-  }
-  return cards;
-}
-
-/** High-value sentences (high tf-score) turned into question+answer pairs */
-function extractKeyFacts(
-  text: string,
-  freq: Map<string, number>,
-  count: number
-): GeneratedFlashcard[] {
-  const cards: GeneratedFlashcard[] = [];
-  const sents = sentences(text)
-    .filter((s) => s.length >= 40 && s.length <= 200)
-    .map((s) => ({ s, score: sentenceScore(s, freq) }))
+  // Summary: top-scoring sentences in original order
+  const scored = sents
+    .map((s, i) => ({ s, score: sentenceScore(s, freq) * (i < 3 ? 1.4 : 1), i }))
     .sort((a, b) => b.score - a.score)
-    .slice(0, count * 3);
+    .slice(0, 6)
+    .sort((a, b) => a.i - b.i);
+  const summary = scored.map((x) => x.s).join(" ");
 
-  for (const { s } of sents) {
-    if (cards.length >= count) break;
+  // Flashcards from definition-like sentences
+  const defPattern =
+    /([A-Z][a-zA-Z\s]{2,40}?)\s+(?:is|are|was|were|means|refers to|is defined as)\s+([^.!?\n]{20,150})[.!?]/g;
+  const cards: GeneratedFlashcard[] = [];
+  const seen = new Set<string>();
+  let m: RegExpExecArray | null;
+  while ((m = defPattern.exec(text)) !== null && cards.length < maxCards) {
+    const term = m[1].trim();
+    if (term.split(/\s+/).length > 6) continue;
+    const key = term.toLowerCase().slice(0, 40);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    cards.push({ question: `What is ${term}?`, answer: m[2].trim() + "." });
+  }
 
-    // Try to split at a verb phrase to form a natural Q
+  // Top-sentence cards to fill remaining slots
+  for (const { s } of scored) {
+    if (cards.length >= maxCards) break;
     const noEnd = s.replace(/[.!?]$/, "");
-
-    // Strategy: find the main verb and split before it for a "what did/does/is" question
-    const verbMatch = noEnd.match(
-      /^(.{15,80}?)\s+((?:is|are|was|were|has|have|had|can|will|may|should|must|did|does|do)\s+\w)/i
-    );
-    if (verbMatch) {
-      const subject = clean(verbMatch[1]);
-      const rest = clean(noEnd.slice(verbMatch[1].length).trim());
-      if (rest.split(/\s+/).length >= 3) {
-        cards.push({
-          question: `What can you say about "${capitalise(subject)}"?`,
-          answer: capitalise(noEnd) + ".",
-        });
-        continue;
-      }
-    }
-
-    // Fallback: first half as question cue, full sentence as answer
     const half = Math.floor(noEnd.length * 0.45);
-    const breakPt = noEnd.indexOf(" ", half);
-    if (breakPt > 0 && breakPt < noEnd.length - 20) {
-      const cue = clean(noEnd.slice(0, breakPt));
+    const bp = noEnd.indexOf(" ", half);
+    if (bp > 0) {
       cards.push({
-        question: `According to your material, complete this idea: "${capitalise(cue)}..."`,
-        answer: capitalise(noEnd) + ".",
+        question: `Complete this idea: "${noEnd.slice(0, bp).trim()}…"`,
+        answer: noEnd + ".",
       });
     }
   }
-  return cards;
+
+  return { summary, flashcards: cards.slice(0, maxCards) };
 }
 
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
-export function generateSummary(text: string, maxSentences = 8): string {
-  const cleaned = clean(text);
-  const sents = sentences(cleaned);
-  if (sents.length === 0) return cleaned.slice(0, 600);
+export async function processContent(
+  text: string,
+  maxCards = 10
+): Promise<ProcessedContent> {
+  try {
+    const result = await processWithGemini(text, maxCards);
+    // If Gemini returned an empty result, fall back
+    if (result.flashcards.length === 0 && result.summary === "") {
+      return algorithmicProcess(text, maxCards);
+    }
+    return result;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Log but don't crash — fall back to algorithmic
+    console.warn("Gemini processing failed, using fallback:", msg);
+    return algorithmicProcess(text, maxCards);
+  }
+}
 
-  const freq = termFrequency(cleaned);
-
-  const scored = sents.map((s, i) => ({
-    s,
-    score: sentenceScore(s, freq) * (i < 3 ? 1.5 : i >= sents.length - 2 ? 1.1 : 1),
-    idx: i,
-  }));
-
-  return scored
-    .slice()
-    .sort((a, b) => b.score - a.score)
-    .slice(0, maxSentences)
-    .sort((a, b) => a.idx - b.idx)
-    .map((x) => x.s)
-    .join(" ");
+// Keep legacy sync exports for any existing callers (now wrapping the async version)
+export function generateSummary(text: string): string {
+  return algorithmicProcess(text, 0).summary;
 }
 
 export function generateFlashcards(text: string, maxCards = 10): GeneratedFlashcard[] {
-  const cleaned = clean(text);
-  const freq = termFrequency(cleaned);
-
-  // Run all extractors
-  const allCards: GeneratedFlashcard[] = [
-    ...extractDefinitions(cleaned),
-    ...extractCauseEffect(cleaned),
-    ...extractLists(cleaned),
-    ...extractComparisons(cleaned),
-    ...extractNumericalFacts(cleaned),
-  ];
-
-  // Deduplicate pattern cards first
-  const patternCards = deduplicate(allCards);
-
-  // Top up with key-fact cards if needed
-  const needed = Math.max(0, maxCards - patternCards.length);
-  const keyFacts = needed > 0 ? deduplicate(extractKeyFacts(cleaned, freq, needed + 5)) : [];
-
-  const combined = deduplicate([...patternCards, ...keyFacts]);
-
-  return combined.slice(0, maxCards);
+  return algorithmicProcess(text, maxCards).flashcards;
 }
 
 export function extractVideoId(url: string): string | null {
