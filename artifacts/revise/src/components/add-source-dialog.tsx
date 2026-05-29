@@ -26,17 +26,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Link2, FileText, Loader2 } from "lucide-react";
 
-const CARD_COUNT_OPTIONS = [5, 10, 15, 20, 25, 30] as const;
+const CARD_COUNT_OPTIONS = [5, 10, 20, 30, 50, 75, 100] as const;
 
 const youtubeSchema = z.object({
   youtubeUrl: z.string().url({ message: "Please enter a valid URL." }).min(1, "Required"),
-  maxFlashcards: z.number().min(5).max(30),
+  maxFlashcards: z.number().min(5).max(100),
 });
 
 const textSchema = z.object({
   textTitle: z.string().min(1, "Title is required").max(100),
   textContent: z.string().min(10, "Text content must be at least 10 characters"),
-  maxFlashcards: z.number().min(5).max(30),
+  maxFlashcards: z.number().min(5).max(100),
 });
 
 interface AddSourceDialogProps {

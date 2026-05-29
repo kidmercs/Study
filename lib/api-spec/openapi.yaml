@@ -166,7 +166,7 @@ components:
           description: Raw text content to generate flashcards from (required when sourceType is text)
         maxFlashcards:
           type: ["integer", "null"]
-          description: Maximum number of flashcards to generate (5-30, default 10)
+          description: Maximum number of flashcards to generate (5-100, default 10)
 
     Source:
       type: object

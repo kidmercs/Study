@@ -81,7 +81,7 @@ router.post("/sources", async (req, res): Promise<void> => {
   }
 
   const { sourceType, youtubeUrl, textTitle, textContent, maxFlashcards } = parsed.data;
-  const cardLimit = Math.min(30, Math.max(5, maxFlashcards ?? 10));
+  const cardLimit = Math.min(100, Math.max(5, maxFlashcards ?? 10));
 
   if (sourceType === "youtube") {
     if (!youtubeUrl) {
