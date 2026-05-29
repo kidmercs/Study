@@ -5,21 +5,25 @@
  * Revise API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { VideoStatus } from './videoStatus';
+import type { SourceSourceType } from './sourceSourceType';
+import type { SourceStatus } from './sourceStatus';
 
-export interface Video {
+export interface Source {
   id: number;
-  youtubeUrl: string;
-  videoId: string;
+  sourceType: SourceSourceType;
+  /** @nullable */
+  youtubeUrl?: string | null;
+  /** @nullable */
+  videoId?: string | null;
   title: string;
   /** @nullable */
   thumbnail?: string | null;
   /** @nullable */
   channelName?: string | null;
-  status: VideoStatus;
+  status: SourceStatus;
   /** @nullable */
   errorMessage?: string | null;
-  flashcardCount?: number;
-  knownCount?: number;
+  flashcardCount: number;
+  knownCount: number;
   createdAt: string;
 }

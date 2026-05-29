@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type VideoDetailStatus = typeof VideoDetailStatus[keyof typeof VideoDetailStatus];
+export type SourceStatus = typeof SourceStatus[keyof typeof SourceStatus];
 
 
-export const VideoDetailStatus = {
+export const SourceStatus = {
   pending: 'pending',
   processing: 'processing',
   done: 'done',

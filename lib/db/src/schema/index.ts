@@ -1,2 +1,2 @@
-export * from "./videos";
+export * from "./sources";
 export * from "./flashcards";

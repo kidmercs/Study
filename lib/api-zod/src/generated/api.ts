@@ -9,7 +9,6 @@ import * as zod from 'zod';
 
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
@@ -18,43 +17,48 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
- * @summary List all videos
+ * @summary List all study sources
  */
-export const ListVideosResponseItem = zod.object({
+export const ListSourcesResponseItem = zod.object({
   "id": zod.number(),
-  "youtubeUrl": zod.string(),
-  "videoId": zod.string(),
+  "sourceType": zod.enum(['youtube', 'text']),
+  "youtubeUrl": zod.string().nullish(),
+  "videoId": zod.string().nullish(),
   "title": zod.string(),
   "thumbnail": zod.string().nullish(),
   "channelName": zod.string().nullish(),
   "status": zod.enum(['pending', 'processing', 'done', 'error']),
   "errorMessage": zod.string().nullish(),
-  "flashcardCount": zod.number().optional(),
-  "knownCount": zod.number().optional(),
+  "flashcardCount": zod.number(),
+  "knownCount": zod.number(),
   "createdAt": zod.string()
 })
-export const ListVideosResponse = zod.array(ListVideosResponseItem)
+export const ListSourcesResponse = zod.array(ListSourcesResponseItem)
 
 
 /**
- * @summary Submit a YouTube video for processing
+ * @summary Submit a YouTube URL or plain text for flashcard generation
  */
-export const CreateVideoBody = zod.object({
-  "youtubeUrl": zod.string().describe('YouTube video URL')
+export const CreateSourceBody = zod.object({
+  "sourceType": zod.enum(['youtube', 'text']),
+  "youtubeUrl": zod.string().nullish().describe('YouTube URL (required when sourceType is youtube)'),
+  "textTitle": zod.string().nullish().describe('Title for the text source (required when sourceType is text)'),
+  "textContent": zod.string().nullish().describe('Raw text content to generate flashcards from (required when sourceType is text)')
 })
 
 
 /**
- * @summary Get a video with its summary and flashcards
+ * @summary Get a source with its summary and flashcards
  */
-export const GetVideoParams = zod.object({
+export const GetSourceParams = zod.object({
   "id": zod.coerce.number()
 })
 
-export const GetVideoResponse = zod.object({
+export const GetSourceResponse = zod.object({
   "id": zod.number(),
-  "youtubeUrl": zod.string(),
-  "videoId": zod.string(),
+  "sourceType": zod.enum(['youtube', 'text']),
+  "youtubeUrl": zod.string().nullish(),
+  "videoId": zod.string().nullish(),
   "title": zod.string(),
   "thumbnail": zod.string().nullish(),
   "channelName": zod.string().nullish(),
@@ -64,7 +68,7 @@ export const GetVideoResponse = zod.object({
   "createdAt": zod.string(),
   "flashcards": zod.array(zod.object({
   "id": zod.number(),
-  "videoId": zod.number(),
+  "sourceId": zod.number(),
   "question": zod.string(),
   "answer": zod.string(),
   "known": zod.boolean(),
@@ -75,9 +79,9 @@ export const GetVideoResponse = zod.object({
 
 
 /**
- * @summary Delete a video and its flashcards
+ * @summary Delete a source and its flashcards
  */
-export const DeleteVideoParams = zod.object({
+export const DeleteSourceParams = zod.object({
   "id": zod.coerce.number()
 })
 
@@ -95,7 +99,7 @@ export const ReviewFlashcardBody = zod.object({
 
 export const ReviewFlashcardResponse = zod.object({
   "id": zod.number(),
-  "videoId": zod.number(),
+  "sourceId": zod.number(),
   "question": zod.string(),
   "answer": zod.string(),
   "known": zod.boolean(),
@@ -108,11 +112,11 @@ export const ReviewFlashcardResponse = zod.object({
  * @summary Get study statistics
  */
 export const GetStatsResponse = zod.object({
-  "totalVideos": zod.number(),
+  "totalSources": zod.number(),
   "totalFlashcards": zod.number(),
   "knownFlashcards": zod.number(),
   "unknownFlashcards": zod.number(),
-  "videosProcessed": zod.number()
+  "sourcesProcessed": zod.number()
 })
 
 

@@ -23,10 +23,10 @@ import type {
   Flashcard,
   FlashcardReview,
   HealthStatus,
-  Stats,
-  Video,
-  VideoDetail,
-  VideoInput
+  Source,
+  SourceDetail,
+  SourceInput,
+  Stats
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -50,7 +50,6 @@ export const getHealthCheckUrl = () => {
 }
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const healthCheck = async ( options?: RequestInit): Promise<HealthStatus> => {
@@ -119,20 +118,20 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
 
 
 
-export const getListVideosUrl = () => {
+export const getListSourcesUrl = () => {
 
 
 
 
-  return `/api/videos`
+  return `/api/sources`
 }
 
 /**
- * @summary List all videos
+ * @summary List all study sources
  */
-export const listVideos = async ( options?: RequestInit): Promise<Video[]> => {
+export const listSources = async ( options?: RequestInit): Promise<Source[]> => {
 
-  return customFetch<Video[]>(getListVideosUrl(),
+  return customFetch<Source[]>(getListSourcesUrl(),
   {
     ...options,
     method: 'GET'
@@ -145,45 +144,45 @@ export const listVideos = async ( options?: RequestInit): Promise<Video[]> => {
 
 
 
-export const getListVideosQueryKey = () => {
+export const getListSourcesQueryKey = () => {
     return [
-    `/api/videos`
+    `/api/sources`
     ] as const;
     }
 
 
-export const getListVideosQueryOptions = <TData = Awaited<ReturnType<typeof listVideos>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVideos>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListSourcesQueryOptions = <TData = Awaited<ReturnType<typeof listSources>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSources>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListVideosQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getListSourcesQueryKey();
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listVideos>>> = ({ signal }) => listVideos({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSources>>> = ({ signal }) => listSources({ signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listVideos>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSources>>, TError, TData> & { queryKey: QueryKey }
 }
 
-export type ListVideosQueryResult = NonNullable<Awaited<ReturnType<typeof listVideos>>>
-export type ListVideosQueryError = ErrorType<unknown>
+export type ListSourcesQueryResult = NonNullable<Awaited<ReturnType<typeof listSources>>>
+export type ListSourcesQueryError = ErrorType<unknown>
 
 
 /**
- * @summary List all videos
+ * @summary List all study sources
  */
 
-export function useListVideos<TData = Awaited<ReturnType<typeof listVideos>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVideos>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export function useListSources<TData = Awaited<ReturnType<typeof listSources>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSources>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getListVideosQueryOptions(options)
+  const queryOptions = getListSourcesQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -196,37 +195,37 @@ export function useListVideos<TData = Awaited<ReturnType<typeof listVideos>>, TE
 
 
 
-export const getCreateVideoUrl = () => {
+export const getCreateSourceUrl = () => {
 
 
 
 
-  return `/api/videos`
+  return `/api/sources`
 }
 
 /**
- * @summary Submit a YouTube video for processing
+ * @summary Submit a YouTube URL or plain text for flashcard generation
  */
-export const createVideo = async (videoInput: VideoInput, options?: RequestInit): Promise<Video> => {
+export const createSource = async (sourceInput: SourceInput, options?: RequestInit): Promise<Source> => {
 
-  return customFetch<Video>(getCreateVideoUrl(),
+  return customFetch<Source>(getCreateSourceUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
-      videoInput,)
+      sourceInput,)
   }
 );}
 
 
 
 
-export const getCreateVideoMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVideo>>, TError,{data: BodyType<VideoInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof createVideo>>, TError,{data: BodyType<VideoInput>}, TContext> => {
+export const getCreateSourceMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSource>>, TError,{data: BodyType<SourceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createSource>>, TError,{data: BodyType<SourceInput>}, TContext> => {
 
-const mutationKey = ['createVideo'];
+const mutationKey = ['createSource'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -236,10 +235,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createVideo>>, {data: BodyType<VideoInput>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createSource>>, {data: BodyType<SourceInput>}> = (props) => {
           const {data} = props ?? {};
 
-          return  createVideo(data,requestOptions)
+          return  createSource(data,requestOptions)
         }
 
 
@@ -249,38 +248,38 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type CreateVideoMutationResult = NonNullable<Awaited<ReturnType<typeof createVideo>>>
-    export type CreateVideoMutationBody = BodyType<VideoInput>
-    export type CreateVideoMutationError = ErrorType<void>
+    export type CreateSourceMutationResult = NonNullable<Awaited<ReturnType<typeof createSource>>>
+    export type CreateSourceMutationBody = BodyType<SourceInput>
+    export type CreateSourceMutationError = ErrorType<void>
 
     /**
- * @summary Submit a YouTube video for processing
+ * @summary Submit a YouTube URL or plain text for flashcard generation
  */
-export const useCreateVideo = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVideo>>, TError,{data: BodyType<VideoInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useCreateSource = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSource>>, TError,{data: BodyType<SourceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof createVideo>>,
+        Awaited<ReturnType<typeof createSource>>,
         TError,
-        {data: BodyType<VideoInput>},
+        {data: BodyType<SourceInput>},
         TContext
       > => {
-      return useMutation(getCreateVideoMutationOptions(options));
+      return useMutation(getCreateSourceMutationOptions(options));
     }
 
-export const getGetVideoUrl = (id: number,) => {
+export const getGetSourceUrl = (id: number,) => {
 
 
 
 
-  return `/api/videos/${id}`
+  return `/api/sources/${id}`
 }
 
 /**
- * @summary Get a video with its summary and flashcards
+ * @summary Get a source with its summary and flashcards
  */
-export const getVideo = async (id: number, options?: RequestInit): Promise<VideoDetail> => {
+export const getSource = async (id: number, options?: RequestInit): Promise<SourceDetail> => {
 
-  return customFetch<VideoDetail>(getGetVideoUrl(id),
+  return customFetch<SourceDetail>(getGetSourceUrl(id),
   {
     ...options,
     method: 'GET'
@@ -293,45 +292,45 @@ export const getVideo = async (id: number, options?: RequestInit): Promise<Video
 
 
 
-export const getGetVideoQueryKey = (id: number,) => {
+export const getGetSourceQueryKey = (id: number,) => {
     return [
-    `/api/videos/${id}`
+    `/api/sources/${id}`
     ] as const;
     }
 
 
-export const getGetVideoQueryOptions = <TData = Awaited<ReturnType<typeof getVideo>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVideo>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetSourceQueryOptions = <TData = Awaited<ReturnType<typeof getSource>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSource>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetVideoQueryKey(id);
+  const queryKey =  queryOptions?.queryKey ?? getGetSourceQueryKey(id);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVideo>>> = ({ signal }) => getVideo(id, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSource>>> = ({ signal }) => getSource(id, { signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVideo>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSource>>, TError, TData> & { queryKey: QueryKey }
 }
 
-export type GetVideoQueryResult = NonNullable<Awaited<ReturnType<typeof getVideo>>>
-export type GetVideoQueryError = ErrorType<void>
+export type GetSourceQueryResult = NonNullable<Awaited<ReturnType<typeof getSource>>>
+export type GetSourceQueryError = ErrorType<void>
 
 
 /**
- * @summary Get a video with its summary and flashcards
+ * @summary Get a source with its summary and flashcards
  */
 
-export function useGetVideo<TData = Awaited<ReturnType<typeof getVideo>>, TError = ErrorType<void>>(
- id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVideo>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export function useGetSource<TData = Awaited<ReturnType<typeof getSource>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSource>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetVideoQueryOptions(id,options)
+  const queryOptions = getGetSourceQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -344,20 +343,20 @@ export function useGetVideo<TData = Awaited<ReturnType<typeof getVideo>>, TError
 
 
 
-export const getDeleteVideoUrl = (id: number,) => {
+export const getDeleteSourceUrl = (id: number,) => {
 
 
 
 
-  return `/api/videos/${id}`
+  return `/api/sources/${id}`
 }
 
 /**
- * @summary Delete a video and its flashcards
+ * @summary Delete a source and its flashcards
  */
-export const deleteVideo = async (id: number, options?: RequestInit): Promise<void> => {
+export const deleteSource = async (id: number, options?: RequestInit): Promise<void> => {
 
-  return customFetch<void>(getDeleteVideoUrl(id),
+  return customFetch<void>(getDeleteSourceUrl(id),
   {
     ...options,
     method: 'DELETE'
@@ -369,11 +368,11 @@ export const deleteVideo = async (id: number, options?: RequestInit): Promise<vo
 
 
 
-export const getDeleteVideoMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteVideo>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteVideo>>, TError,{id: number}, TContext> => {
+export const getDeleteSourceMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSource>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteSource>>, TError,{id: number}, TContext> => {
 
-const mutationKey = ['deleteVideo'];
+const mutationKey = ['deleteSource'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -383,10 +382,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteVideo>>, {id: number}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteSource>>, {id: number}> = (props) => {
           const {id} = props ?? {};
 
-          return  deleteVideo(id,requestOptions)
+          return  deleteSource(id,requestOptions)
         }
 
 
@@ -396,22 +395,22 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type DeleteVideoMutationResult = NonNullable<Awaited<ReturnType<typeof deleteVideo>>>
+    export type DeleteSourceMutationResult = NonNullable<Awaited<ReturnType<typeof deleteSource>>>
 
-    export type DeleteVideoMutationError = ErrorType<void>
+    export type DeleteSourceMutationError = ErrorType<void>
 
     /**
- * @summary Delete a video and its flashcards
+ * @summary Delete a source and its flashcards
  */
-export const useDeleteVideo = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteVideo>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useDeleteSource = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSource>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof deleteVideo>>,
+        Awaited<ReturnType<typeof deleteSource>>,
         TError,
         {id: number},
         TContext
       > => {
-      return useMutation(getDeleteVideoMutationOptions(options));
+      return useMutation(getDeleteSourceMutationOptions(options));
     }
 
 export const getReviewFlashcardUrl = (id: number,) => {

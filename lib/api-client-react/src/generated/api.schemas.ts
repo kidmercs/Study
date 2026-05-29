@@ -9,42 +9,83 @@ export interface HealthStatus {
   status: string;
 }
 
-export interface VideoInput {
-  /** YouTube video URL */
-  youtubeUrl: string;
+export type SourceInputSourceType = typeof SourceInputSourceType[keyof typeof SourceInputSourceType];
+
+
+export const SourceInputSourceType = {
+  youtube: 'youtube',
+  text: 'text',
+} as const;
+
+export interface SourceInput {
+  sourceType: SourceInputSourceType;
+  /**
+     * YouTube URL (required when sourceType is youtube)
+     * @nullable
+     */
+  youtubeUrl?: string | null;
+  /**
+     * Title for the text source (required when sourceType is text)
+     * @nullable
+     */
+  textTitle?: string | null;
+  /**
+     * Raw text content to generate flashcards from (required when sourceType is text)
+     * @nullable
+     */
+  textContent?: string | null;
 }
 
-export type VideoStatus = typeof VideoStatus[keyof typeof VideoStatus];
+export type SourceSourceType = typeof SourceSourceType[keyof typeof SourceSourceType];
 
 
-export const VideoStatus = {
+export const SourceSourceType = {
+  youtube: 'youtube',
+  text: 'text',
+} as const;
+
+export type SourceStatus = typeof SourceStatus[keyof typeof SourceStatus];
+
+
+export const SourceStatus = {
   pending: 'pending',
   processing: 'processing',
   done: 'done',
   error: 'error',
 } as const;
 
-export interface Video {
+export interface Source {
   id: number;
-  youtubeUrl: string;
-  videoId: string;
+  sourceType: SourceSourceType;
+  /** @nullable */
+  youtubeUrl?: string | null;
+  /** @nullable */
+  videoId?: string | null;
   title: string;
   /** @nullable */
   thumbnail?: string | null;
   /** @nullable */
   channelName?: string | null;
-  status: VideoStatus;
+  status: SourceStatus;
   /** @nullable */
   errorMessage?: string | null;
-  flashcardCount?: number;
-  knownCount?: number;
+  flashcardCount: number;
+  knownCount: number;
   createdAt: string;
 }
 
-export type VideoDetailStatus = typeof VideoDetailStatus[keyof typeof VideoDetailStatus];
+export type SourceDetailSourceType = typeof SourceDetailSourceType[keyof typeof SourceDetailSourceType];
 
 
-export const VideoDetailStatus = {
+export const SourceDetailSourceType = {
+  youtube: 'youtube',
+  text: 'text',
+} as const;
+
+export type SourceDetailStatus = typeof SourceDetailStatus[keyof typeof SourceDetailStatus];
+
+
+export const SourceDetailStatus = {
   pending: 'pending',
   processing: 'processing',
   done: 'done',
@@ -53,7 +94,7 @@ export const VideoDetailStatus = {
 
 export interface Flashcard {
   id: number;
-  videoId: number;
+  sourceId: number;
   question: string;
   answer: string;
   known: boolean;
@@ -61,16 +102,19 @@ export interface Flashcard {
   createdAt: string;
 }
 
-export interface VideoDetail {
+export interface SourceDetail {
   id: number;
-  youtubeUrl: string;
-  videoId: string;
+  sourceType: SourceDetailSourceType;
+  /** @nullable */
+  youtubeUrl?: string | null;
+  /** @nullable */
+  videoId?: string | null;
   title: string;
   /** @nullable */
   thumbnail?: string | null;
   /** @nullable */
   channelName?: string | null;
-  status: VideoDetailStatus;
+  status: SourceDetailStatus;
   /** @nullable */
   errorMessage?: string | null;
   /** @nullable */
@@ -84,10 +128,10 @@ export interface FlashcardReview {
 }
 
 export interface Stats {
-  totalVideos: number;
+  totalSources: number;
   totalFlashcards: number;
   knownFlashcards: number;
   unknownFlashcards: number;
-  videosProcessed: number;
+  sourcesProcessed: number;
 }
 

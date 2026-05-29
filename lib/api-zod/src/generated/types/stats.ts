@@ -7,9 +7,9 @@
  */
 
 export interface Stats {
-  totalVideos: number;
+  totalSources: number;
   totalFlashcards: number;
   knownFlashcards: number;
   unknownFlashcards: number;
-  videosProcessed: number;
+  sourcesProcessed: number;
 }

@@ -9,8 +9,8 @@ servers:
 tags:
   - name: health
     description: Health operations
-  - name: videos
-    description: Video operations
+  - name: sources
+    description: Study source operations
   - name: flashcards
     description: Flashcard operations
 paths:
@@ -19,7 +19,6 @@ paths:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -28,45 +27,45 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
 
-  /videos:
+  /sources:
     get:
-      operationId: listVideos
-      tags: [videos]
-      summary: List all videos
+      operationId: listSources
+      tags: [sources]
+      summary: List all study sources
       responses:
         "200":
-          description: List of videos
+          description: List of sources
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Video"
+                  $ref: "#/components/schemas/Source"
     post:
-      operationId: createVideo
-      tags: [videos]
-      summary: Submit a YouTube video for processing
+      operationId: createSource
+      tags: [sources]
+      summary: Submit a YouTube URL or plain text for flashcard generation
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/VideoInput"
+              $ref: "#/components/schemas/SourceInput"
       responses:
         "201":
-          description: Video created
+          description: Source created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Video"
+                $ref: "#/components/schemas/Source"
         "400":
           description: Invalid request
 
-  /videos/{id}:
+  /sources/{id}:
     get:
-      operationId: getVideo
-      tags: [videos]
-      summary: Get a video with its summary and flashcards
+      operationId: getSource
+      tags: [sources]
+      summary: Get a source with its summary and flashcards
       parameters:
         - name: id
           in: path
@@ -75,17 +74,17 @@ paths:
             type: integer
       responses:
         "200":
-          description: Video detail
+          description: Source detail
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/VideoDetail"
+                $ref: "#/components/schemas/SourceDetail"
         "404":
           description: Not found
     delete:
-      operationId: deleteVideo
-      tags: [videos]
-      summary: Delete a video and its flashcards
+      operationId: deleteSource
+      tags: [sources]
+      summary: Delete a source and its flashcards
       parameters:
         - name: id
           in: path
@@ -128,7 +127,7 @@ paths:
   /stats:
     get:
       operationId: getStats
-      tags: [videos]
+      tags: [sources]
       summary: Get study statistics
       responses:
         "200":
@@ -148,31 +147,44 @@ components:
       required:
         - status
 
-    VideoInput:
+    SourceInput:
       type: object
       required:
-        - youtubeUrl
+        - sourceType
       properties:
-        youtubeUrl:
+        sourceType:
           type: string
-          description: YouTube video URL
+          enum: [youtube, text]
+        youtubeUrl:
+          type: ["string", "null"]
+          description: YouTube URL (required when sourceType is youtube)
+        textTitle:
+          type: ["string", "null"]
+          description: Title for the text source (required when sourceType is text)
+        textContent:
+          type: ["string", "null"]
+          description: Raw text content to generate flashcards from (required when sourceType is text)
 
-    Video:
+    Source:
       type: object
       required:
         - id
-        - youtubeUrl
-        - videoId
+        - sourceType
         - title
         - status
+        - flashcardCount
+        - knownCount
         - createdAt
       properties:
         id:
           type: integer
+        sourceType:
+          type: string
+          enum: [youtube, text]
         youtubeUrl:
-          type: string
+          type: ["string", "null"]
         videoId:
-          type: string
+          type: ["string", "null"]
         title:
           type: string
         thumbnail:
@@ -191,12 +203,11 @@ components:
         createdAt:
           type: string
 
-    VideoDetail:
+    SourceDetail:
       type: object
       required:
         - id
-        - youtubeUrl
-        - videoId
+        - sourceType
         - title
         - status
         - createdAt
@@ -204,10 +215,13 @@ components:
       properties:
         id:
           type: integer
+        sourceType:
+          type: string
+          enum: [youtube, text]
         youtubeUrl:
-          type: string
+          type: ["string", "null"]
         videoId:
-          type: string
+          type: ["string", "null"]
         title:
           type: string
         thumbnail:
@@ -232,7 +246,7 @@ components:
       type: object
       required:
         - id
-        - videoId
+        - sourceId
         - question
         - answer
         - known
@@ -241,7 +255,7 @@ components:
       properties:
         id:
           type: integer
-        videoId:
+        sourceId:
           type: integer
         question:
           type: string
@@ -265,13 +279,13 @@ components:
     Stats:
       type: object
       required:
-        - totalVideos
+        - totalSources
         - totalFlashcards
         - knownFlashcards
         - unknownFlashcards
-        - videosProcessed
+        - sourcesProcessed
       properties:
-        totalVideos:
+        totalSources:
           type: integer
         totalFlashcards:
           type: integer
@@ -279,5 +293,5 @@ components:
           type: integer
         unknownFlashcards:
           type: integer
-        videosProcessed:
+        sourcesProcessed:
           type: integer

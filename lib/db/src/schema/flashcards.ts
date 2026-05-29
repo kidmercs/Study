@@ -1,11 +1,11 @@
 import { pgTable, text, serial, timestamp, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
-import { videosTable } from "./videos";
+import { sourcesTable } from "./sources";
 
 export const flashcardsTable = pgTable("flashcards", {
   id: serial("id").primaryKey(),
-  videoId: integer("video_id").notNull().references(() => videosTable.id, { onDelete: "cascade" }),
+  sourceId: integer("source_id").notNull().references(() => sourcesTable.id, { onDelete: "cascade" }),
   question: text("question").notNull(),
   answer: text("answer").notNull(),
   known: boolean("known").notNull().default(false),

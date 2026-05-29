@@ -6,18 +6,22 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Flashcard } from './flashcard';
-import type { VideoDetailStatus } from './videoDetailStatus';
+import type { SourceDetailSourceType } from './sourceDetailSourceType';
+import type { SourceDetailStatus } from './sourceDetailStatus';
 
-export interface VideoDetail {
+export interface SourceDetail {
   id: number;
-  youtubeUrl: string;
-  videoId: string;
+  sourceType: SourceDetailSourceType;
+  /** @nullable */
+  youtubeUrl?: string | null;
+  /** @nullable */
+  videoId?: string | null;
   title: string;
   /** @nullable */
   thumbnail?: string | null;
   /** @nullable */
   channelName?: string | null;
-  status: VideoDetailStatus;
+  status: SourceDetailStatus;
   /** @nullable */
   errorMessage?: string | null;
   /** @nullable */

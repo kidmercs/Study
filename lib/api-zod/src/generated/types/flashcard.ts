@@ -8,7 +8,7 @@
 
 export interface Flashcard {
   id: number;
-  videoId: number;
+  sourceId: number;
   question: string;
   answer: string;
   known: boolean;
