@@ -56,23 +56,22 @@ function CardCountPicker({
 }) {
   return (
     <div>
-      <p className="text-sm font-medium mb-2 text-foreground">Number of flashcards</p>
-      <div className="flex flex-wrap gap-2">
-        {CARD_COUNT_OPTIONS.map((n) => (
-          <button
-            key={n}
-            type="button"
-            onClick={() => onChange(n)}
-            className={[
-              "px-3 py-1 rounded-md text-sm font-semibold border transition-colors",
-              value === n
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-background text-muted-foreground border-border hover:border-primary/60 hover:text-foreground",
-            ].join(" ")}
-          >
-            {n}
-          </button>
-        ))}
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm font-medium text-foreground">Number of flashcards</p>
+        <span className="text-sm font-bold text-primary w-8 text-right">{value}</span>
+      </div>
+      <input
+        type="range"
+        min={5}
+        max={100}
+        step={5}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full h-2 rounded-full appearance-none cursor-pointer accent-primary bg-muted"
+      />
+      <div className="flex justify-between text-xs text-muted-foreground mt-1">
+        <span>5</span>
+        <span>100</span>
       </div>
     </div>
   );
@@ -216,6 +215,9 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Add a new study source</DialogTitle>
+          <p className="text-sm text-muted-foreground pt-1">
+            Automatically generates flashcards, a mind map, and a practice quiz.
+          </p>
         </DialogHeader>
         <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="mt-4">
           <TabsList className="grid w-full grid-cols-3">
