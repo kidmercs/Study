@@ -29,4 +29,24 @@ export interface SourceInput {
      * @nullable
      */
   maxFlashcards?: number | null;
+  /**
+     * Number of practice questions to generate (3-20, default 5)
+     * @nullable
+     */
+  maxQuestions?: number | null;
+  /**
+     * Whether to generate flashcards (default true)
+     * @nullable
+     */
+  generateFlashcards?: boolean | null;
+  /**
+     * Whether to generate a mind map (default true)
+     * @nullable
+     */
+  generateMindMap?: boolean | null;
+  /**
+     * Whether to generate practice questions (default true)
+     * @nullable
+     */
+  generateQuiz?: boolean | null;
 }

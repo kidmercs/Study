@@ -44,7 +44,11 @@ export const CreateSourceBody = zod.object({
   "youtubeUrl": zod.string().nullish().describe('YouTube URL (required when sourceType is youtube)'),
   "textTitle": zod.string().nullish().describe('Title for the text\/pdf source (required when sourceType is text or pdf)'),
   "textContent": zod.string().nullish().describe('Raw text content to generate study materials from (required when sourceType is text or pdf)'),
-  "maxFlashcards": zod.number().nullish().describe('Maximum number of flashcards to generate (5-100, default 10)')
+  "maxFlashcards": zod.number().nullish().describe('Maximum number of flashcards to generate (5-100, default 10)'),
+  "maxQuestions": zod.number().nullish().describe('Number of practice questions to generate (3-20, default 5)'),
+  "generateFlashcards": zod.boolean().nullish().describe('Whether to generate flashcards (default true)'),
+  "generateMindMap": zod.boolean().nullish().describe('Whether to generate a mind map (default true)'),
+  "generateQuiz": zod.boolean().nullish().describe('Whether to generate practice questions (default true)')
 })
 
 

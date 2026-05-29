@@ -11,18 +11,17 @@ interface PracticeQuestionsViewProps {
 export function PracticeQuestionsView({ questions }: PracticeQuestionsViewProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const [userAnswers, setUserAnswers] = useState<number[]>([]);
   const [completed, setCompleted] = useState(false);
-  const [score, setScore] = useState(0);
 
   const handleSelect = (optionIndex: number) => {
     if (selectedOption !== null) return;
     setSelectedOption(optionIndex);
-    if (optionIndex === questions[currentIndex].correctIndex) {
-      setScore((s) => s + 1);
-    }
   };
 
   const handleNext = () => {
+    const answers = [...userAnswers, selectedOption!];
+    setUserAnswers(answers);
     setSelectedOption(null);
     if (currentIndex < questions.length - 1) {
       setCurrentIndex((i) => i + 1);
@@ -34,8 +33,8 @@ export function PracticeQuestionsView({ questions }: PracticeQuestionsViewProps)
   const handleRestart = () => {
     setCurrentIndex(0);
     setSelectedOption(null);
+    setUserAnswers([]);
     setCompleted(false);
-    setScore(0);
   };
 
   if (questions.length === 0) {
@@ -47,29 +46,85 @@ export function PracticeQuestionsView({ questions }: PracticeQuestionsViewProps)
   }
 
   if (completed) {
+    const score = userAnswers.filter((a, i) => a === questions[i].correctIndex).length;
     const pct = Math.round((score / questions.length) * 100);
+
     return (
-      <div className="w-full max-w-xl mx-auto py-16 flex flex-col items-center text-center">
-        <div
-          className={[
-            "w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-sm",
-            pct >= 80
-              ? "bg-emerald-100 text-emerald-700"
-              : pct >= 50
-              ? "bg-amber-100 text-amber-700"
-              : "bg-red-100 text-red-700",
-          ].join(" ")}
-        >
-          <span className="text-2xl font-bold">{pct}%</span>
+      <div className="w-full max-w-2xl mx-auto pb-12">
+        <div className="flex flex-col items-center text-center py-8">
+          <div
+            className={[
+              "w-20 h-20 rounded-full flex items-center justify-center mb-4 shadow-sm",
+              pct >= 80
+                ? "bg-emerald-100 text-emerald-700"
+                : pct >= 50
+                ? "bg-amber-100 text-amber-700"
+                : "bg-red-100 text-red-700",
+            ].join(" ")}
+          >
+            <span className="text-2xl font-bold">{pct}%</span>
+          </div>
+          <h2 className="text-2xl font-bold mb-1">Quiz Complete!</h2>
+          <p className="text-muted-foreground mb-6">
+            You got <span className="font-semibold text-foreground">{score}</span> out of{" "}
+            <span className="font-semibold text-foreground">{questions.length}</span> correct.
+          </p>
+          <Button onClick={handleRestart} variant="outline">
+            <RotateCcw className="w-4 h-4 mr-2" />
+            Try Again
+          </Button>
         </div>
-        <h2 className="text-3xl font-bold mb-2">Quiz Complete!</h2>
-        <p className="text-muted-foreground mb-8">
-          You got {score} out of {questions.length} correct.
-        </p>
-        <Button size="lg" onClick={handleRestart}>
-          <RotateCcw className="w-4 h-4 mr-2" />
-          Try Again
-        </Button>
+
+        <div className="space-y-4 mt-2">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide px-1">
+            Answer Review
+          </h3>
+          {questions.map((q, qi) => {
+            const userIdx = userAnswers[qi];
+            const correct = userIdx === q.correctIndex;
+            return (
+              <Card key={q.id} className={["p-5 border-2", correct ? "border-emerald-400/50" : "border-red-300/50"].join(" ")}>
+                <div className="flex items-start gap-3 mb-4">
+                  <div
+                    className={[
+                      "w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5",
+                      correct ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600",
+                    ].join(" ")}
+                  >
+                    {correct ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+                  </div>
+                  <p className="font-medium text-foreground leading-snug">{q.question}</p>
+                </div>
+
+                <div className="flex flex-col gap-2 mb-4 pl-9">
+                  {q.options.map((opt, oi) => {
+                    const isCorrect = oi === q.correctIndex;
+                    const isUserWrong = oi === userIdx && !correct;
+                    let style = "text-muted-foreground/60";
+                    if (isCorrect) style = "text-emerald-700 font-semibold";
+                    if (isUserWrong) style = "text-red-600 line-through";
+
+                    return (
+                      <div key={oi} className={`flex items-center gap-2 text-sm ${style}`}>
+                        <span className="w-5 h-5 rounded-full border border-current flex items-center justify-center text-xs font-bold flex-shrink-0">
+                          {String.fromCharCode(65 + oi)}
+                        </span>
+                        <span>{opt}</span>
+                        {isCorrect && <Check className="w-3.5 h-3.5 ml-auto flex-shrink-0" />}
+                        {isUserWrong && <X className="w-3.5 h-3.5 ml-auto flex-shrink-0" />}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="pl-9 text-sm text-muted-foreground bg-muted/40 rounded-lg p-3 leading-relaxed">
+                  <span className="font-semibold text-foreground">Explanation: </span>
+                  {q.explanation}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
       </div>
     );
   }
@@ -81,7 +136,9 @@ export function PracticeQuestionsView({ questions }: PracticeQuestionsViewProps)
     <div className="w-full max-w-2xl mx-auto flex flex-col gap-6">
       <div className="flex justify-between items-center text-sm font-medium text-muted-foreground">
         <span>Question {currentIndex + 1} of {questions.length}</span>
-        <span>Score: {score}/{currentIndex}</span>
+        <span>
+          {userAnswers.filter((a, i) => a === questions[i].correctIndex).length}/{currentIndex} correct
+        </span>
       </div>
 
       <Card className="p-6 sm:p-8 shadow-md">

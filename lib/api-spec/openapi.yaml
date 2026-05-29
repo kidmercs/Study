@@ -169,6 +169,18 @@ components:
         maxFlashcards:
           type: ["integer", "null"]
           description: Maximum number of flashcards to generate (5-100, default 10)
+        maxQuestions:
+          type: ["integer", "null"]
+          description: Number of practice questions to generate (3-20, default 5)
+        generateFlashcards:
+          type: ["boolean", "null"]
+          description: Whether to generate flashcards (default true)
+        generateMindMap:
+          type: ["boolean", "null"]
+          description: Whether to generate a mind map (default true)
+        generateQuiz:
+          type: ["boolean", "null"]
+          description: Whether to generate practice questions (default true)
 
     Source:
       type: object

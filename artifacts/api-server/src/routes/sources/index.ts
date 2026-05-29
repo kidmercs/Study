@@ -48,7 +48,7 @@ async function saveProcessedContent(
 
   await db
     .update(sourcesTable)
-    .set({ summary, mindMap: JSON.stringify(mindMap), status: "done" })
+    .set({ summary, mindMap: mindMap ? JSON.stringify(mindMap) : null, status: "done" })
     .where(eq(sourcesTable.id, sourceId));
 
   if (cards.length > 0) {
@@ -109,8 +109,14 @@ router.post("/sources", async (req, res): Promise<void> => {
     return;
   }
 
-  const { sourceType, youtubeUrl, textTitle, textContent, maxFlashcards } = parsed.data;
-  const cardLimit = Math.min(100, Math.max(5, maxFlashcards ?? 10));
+  const { sourceType, youtubeUrl, textTitle, textContent, maxFlashcards, maxQuestions, generateFlashcards, generateMindMap, generateQuiz } = parsed.data;
+  const processOptions = {
+    generateFlashcards: generateFlashcards ?? true,
+    generateMindMap: generateMindMap ?? true,
+    generateQuiz: generateQuiz ?? true,
+    maxFlashcards: Math.min(100, Math.max(5, maxFlashcards ?? 10)),
+    maxQuestions: Math.min(20, Math.max(3, maxQuestions ?? 5)),
+  };
 
   if (sourceType === "youtube") {
     if (!youtubeUrl) {
@@ -149,7 +155,7 @@ router.post("/sources", async (req, res): Promise<void> => {
           fetchVideoMeta(videoId),
           fetchTranscript(videoId),
         ]);
-        const result = await processContent(transcript, cardLimit);
+        const result = await processContent(transcript, processOptions);
 
         await db
           .update(sourcesTable)
@@ -202,7 +208,7 @@ router.post("/sources", async (req, res): Promise<void> => {
 
   setImmediate(async () => {
     try {
-      const result = await processContent(textContent, cardLimit);
+      const result = await processContent(textContent, processOptions);
       await saveProcessedContent(source.id, result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -310,7 +316,7 @@ router.post("/sources/:id/retry", async (req, res): Promise<void> => {
 
   setImmediate(async () => {
     try {
-      const cardLimit = 10;
+      const retryOptions = { generateFlashcards: true, generateMindMap: true, generateQuiz: true, maxFlashcards: 10, maxQuestions: 5 };
 
       if (source.sourceType === "youtube") {
         const videoId = source.videoId!;
@@ -325,13 +331,13 @@ router.post("/sources/:id/retry", async (req, res): Promise<void> => {
 
         await db.delete(flashcardsTable).where(eq(flashcardsTable.sourceId, source.id));
         await db.delete(questionsTable).where(eq(questionsTable.sourceId, source.id));
-        const result = await processContent(transcript, cardLimit);
+        const result = await processContent(transcript, retryOptions);
         await saveProcessedContent(source.id, result);
       } else {
         const text = source.rawText ?? "";
         await db.delete(flashcardsTable).where(eq(flashcardsTable.sourceId, source.id));
         await db.delete(questionsTable).where(eq(questionsTable.sourceId, source.id));
-        const result = await processContent(text, cardLimit);
+        const result = await processContent(text, retryOptions);
         await saveProcessedContent(source.id, result);
       }
     } catch (err) {

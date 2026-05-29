@@ -24,54 +24,113 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Link2, FileText, Loader2, FileUp } from "lucide-react";
-
-const CARD_COUNT_OPTIONS = [5, 10, 20, 30, 50, 75, 100] as const;
+import { Link2, FileText, Loader2, FileUp, CreditCard, Network, HelpCircle } from "lucide-react";
 
 const youtubeSchema = z.object({
   youtubeUrl: z.string().url({ message: "Please enter a valid URL." }).min(1, "Required"),
   maxFlashcards: z.number().min(5).max(100),
+  maxQuestions: z.number().min(3).max(20),
 });
 
 const textSchema = z.object({
   textTitle: z.string().min(1, "Title is required").max(100),
   textContent: z.string().min(10, "Text content must be at least 10 characters"),
   maxFlashcards: z.number().min(5).max(100),
+  maxQuestions: z.number().min(3).max(20),
 });
 
 const pdfSchema = z.object({
   maxFlashcards: z.number().min(5).max(100),
+  maxQuestions: z.number().min(3).max(20),
 });
+
+interface StudyModes {
+  flashcards: boolean;
+  mindMap: boolean;
+  quiz: boolean;
+}
 
 interface AddSourceDialogProps {
   children?: React.ReactNode;
 }
 
-function CardCountPicker({
+function CountSlider({
+  label,
   value,
   onChange,
+  min,
+  max,
+  step,
 }: {
+  label: string;
   value: number;
   onChange: (n: number) => void;
+  min: number;
+  max: number;
+  step: number;
 }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <p className="text-sm font-medium text-foreground">Number of flashcards</p>
+        <p className="text-sm font-medium text-foreground">{label}</p>
         <span className="text-sm font-bold text-primary w-8 text-right">{value}</span>
       </div>
       <input
         type="range"
-        min={5}
-        max={100}
-        step={5}
+        min={min}
+        max={max}
+        step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
         className="w-full h-2 rounded-full appearance-none cursor-pointer accent-primary bg-muted"
       />
       <div className="flex justify-between text-xs text-muted-foreground mt-1">
-        <span>5</span>
-        <span>100</span>
+        <span>{min}</span>
+        <span>{max}</span>
+      </div>
+    </div>
+  );
+}
+
+function StudyModeToggle({
+  modes,
+  onChange,
+}: {
+  modes: StudyModes;
+  onChange: (modes: StudyModes) => void;
+}) {
+  const options = [
+    { key: "flashcards" as const, label: "Flashcards", Icon: CreditCard },
+    { key: "mindMap" as const, label: "Mind Map", Icon: Network },
+    { key: "quiz" as const, label: "Practice Quiz", Icon: HelpCircle },
+  ];
+
+  const toggle = (key: keyof StudyModes) => {
+    const next = { ...modes, [key]: !modes[key] };
+    if (!next.flashcards && !next.mindMap && !next.quiz) return;
+    onChange(next);
+  };
+
+  return (
+    <div>
+      <p className="text-sm font-medium text-foreground mb-2">Generate</p>
+      <div className="flex gap-2">
+        {options.map(({ key, label, Icon }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => toggle(key)}
+            className={[
+              "flex-1 flex flex-col items-center gap-1.5 px-2 py-3 rounded-xl border-2 text-xs font-semibold transition-colors",
+              modes[key]
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border bg-background text-muted-foreground hover:border-primary/40",
+            ].join(" ")}
+          >
+            <Icon className="w-4 h-4" />
+            {label}
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -103,6 +162,7 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
   const [tab, setTab] = React.useState<"youtube" | "text" | "pdf">("youtube");
   const [pdfFile, setPdfFile] = React.useState<File | null>(null);
   const [isExtractingPdf, setIsExtractingPdf] = React.useState(false);
+  const [modes, setModes] = React.useState<StudyModes>({ flashcards: true, mindMap: true, quiz: true });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const createSource = useCreateSource();
   const queryClient = useQueryClient();
@@ -110,22 +170,36 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
 
   const youtubeForm = useForm<z.infer<typeof youtubeSchema>>({
     resolver: zodResolver(youtubeSchema),
-    defaultValues: { youtubeUrl: "", maxFlashcards: 10 },
+    defaultValues: { youtubeUrl: "", maxFlashcards: 10, maxQuestions: 5 },
   });
 
   const textForm = useForm<z.infer<typeof textSchema>>({
     resolver: zodResolver(textSchema),
-    defaultValues: { textTitle: "", textContent: "", maxFlashcards: 10 },
+    defaultValues: { textTitle: "", textContent: "", maxFlashcards: 10, maxQuestions: 5 },
   });
 
   const pdfForm = useForm<z.infer<typeof pdfSchema>>({
     resolver: zodResolver(pdfSchema),
-    defaultValues: { maxFlashcards: 10 },
+    defaultValues: { maxFlashcards: 10, maxQuestions: 5 },
+  });
+
+  const buildModeData = (flashcards: number, questions: number) => ({
+    generateFlashcards: modes.flashcards,
+    generateMindMap: modes.mindMap,
+    generateQuiz: modes.quiz,
+    maxFlashcards: modes.flashcards ? flashcards : undefined,
+    maxQuestions: modes.quiz ? questions : undefined,
   });
 
   const onSubmitYoutube = (values: z.infer<typeof youtubeSchema>) => {
     createSource.mutate(
-      { data: { sourceType: "youtube", youtubeUrl: values.youtubeUrl, maxFlashcards: values.maxFlashcards } },
+      {
+        data: {
+          sourceType: "youtube",
+          youtubeUrl: values.youtubeUrl,
+          ...buildModeData(values.maxFlashcards, values.maxQuestions),
+        },
+      },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey() });
@@ -147,7 +221,7 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
           sourceType: "text",
           textTitle: values.textTitle,
           textContent: values.textContent,
-          maxFlashcards: values.maxFlashcards,
+          ...buildModeData(values.maxFlashcards, values.maxQuestions),
         },
       },
       {
@@ -182,7 +256,7 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
             sourceType: "pdf",
             textTitle: pdfFile.name.replace(/\.pdf$/i, ""),
             textContent: text,
-            maxFlashcards: values.maxFlashcards,
+            ...buildModeData(values.maxFlashcards, values.maxQuestions),
           },
         },
         {
@@ -207,6 +281,14 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
 
   const isPending = createSource.isPending || isExtractingPdf;
 
+  const renderModeOptions = (flashcardsField: React.ReactNode, questionsField: React.ReactNode) => (
+    <div className="space-y-4">
+      <StudyModeToggle modes={modes} onChange={setModes} />
+      {modes.flashcards && flashcardsField}
+      {modes.quiz && questionsField}
+    </div>
+  );
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -215,11 +297,8 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Add a new study source</DialogTitle>
-          <p className="text-sm text-muted-foreground pt-1">
-            Automatically generates flashcards, a mind map, and a practice quiz.
-          </p>
         </DialogHeader>
-        <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="mt-4">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="mt-2">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="youtube" data-testid="tab-youtube">
               <Link2 className="w-4 h-4 mr-1.5" />
@@ -251,21 +330,34 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={youtubeForm.control}
-                  name="maxFlashcards"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <CardCountPicker value={field.value} onChange={field.onChange} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
+                {renderModeOptions(
+                  <FormField
+                    control={youtubeForm.control}
+                    name="maxFlashcards"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <CountSlider label="Number of flashcards" value={field.value} onChange={field.onChange} min={5} max={100} step={5} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />,
+                  <FormField
+                    control={youtubeForm.control}
+                    name="maxQuestions"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <CountSlider label="Number of quiz questions" value={field.value} onChange={field.onChange} min={3} max={20} step={1} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                )}
                 <div className="flex justify-end pt-1">
                   <Button type="submit" disabled={isPending} data-testid="button-submit-youtube">
                     {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                    Generate Study Materials
+                    Generate
                   </Button>
                 </div>
               </form>
@@ -297,7 +389,7 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
                       <FormControl>
                         <Textarea
                           placeholder="Paste your study material here..."
-                          className="min-h-[130px] resize-none"
+                          className="min-h-[110px] resize-none"
                           {...field}
                           data-testid="input-text-content"
                         />
@@ -306,21 +398,34 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={textForm.control}
-                  name="maxFlashcards"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <CardCountPicker value={field.value} onChange={field.onChange} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
+                {renderModeOptions(
+                  <FormField
+                    control={textForm.control}
+                    name="maxFlashcards"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <CountSlider label="Number of flashcards" value={field.value} onChange={field.onChange} min={5} max={100} step={5} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />,
+                  <FormField
+                    control={textForm.control}
+                    name="maxQuestions"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <CountSlider label="Number of quiz questions" value={field.value} onChange={field.onChange} min={3} max={20} step={1} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                )}
                 <div className="flex justify-end pt-1">
                   <Button type="submit" disabled={isPending} data-testid="button-submit-text">
                     {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                    Generate Study Materials
+                    Generate
                   </Button>
                 </div>
               </form>
@@ -358,21 +463,34 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
                     )}
                   </div>
                 </div>
-                <FormField
-                  control={pdfForm.control}
-                  name="maxFlashcards"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <CardCountPicker value={field.value} onChange={field.onChange} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
+                {renderModeOptions(
+                  <FormField
+                    control={pdfForm.control}
+                    name="maxFlashcards"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <CountSlider label="Number of flashcards" value={field.value} onChange={field.onChange} min={5} max={100} step={5} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />,
+                  <FormField
+                    control={pdfForm.control}
+                    name="maxQuestions"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <CountSlider label="Number of quiz questions" value={field.value} onChange={field.onChange} min={3} max={20} step={1} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                )}
                 <div className="flex justify-end pt-1">
                   <Button type="submit" disabled={isPending || !pdfFile} data-testid="button-submit-pdf">
                     {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                    {isExtractingPdf ? "Reading PDF..." : "Generate Study Materials"}
+                    {isExtractingPdf ? "Reading PDF..." : "Generate"}
                   </Button>
                 </div>
               </form>
