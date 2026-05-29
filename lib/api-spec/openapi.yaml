@@ -1,15 +1,18 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Revise API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: videos
+    description: Video operations
+  - name: flashcards
+    description: Flashcard operations
 paths:
   /healthz:
     get:
@@ -24,6 +27,117 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /videos:
+    get:
+      operationId: listVideos
+      tags: [videos]
+      summary: List all videos
+      responses:
+        "200":
+          description: List of videos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Video"
+    post:
+      operationId: createVideo
+      tags: [videos]
+      summary: Submit a YouTube video for processing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VideoInput"
+      responses:
+        "201":
+          description: Video created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Video"
+        "400":
+          description: Invalid request
+
+  /videos/{id}:
+    get:
+      operationId: getVideo
+      tags: [videos]
+      summary: Get a video with its summary and flashcards
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Video detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoDetail"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteVideo
+      tags: [videos]
+      summary: Delete a video and its flashcards
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /flashcards/{id}/review:
+    patch:
+      operationId: reviewFlashcard
+      tags: [flashcards]
+      summary: Mark a flashcard as known or unknown
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FlashcardReview"
+      responses:
+        "200":
+          description: Updated flashcard
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Flashcard"
+        "404":
+          description: Not found
+
+  /stats:
+    get:
+      operationId: getStats
+      tags: [videos]
+      summary: Get study statistics
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stats"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +148,136 @@ components:
       required:
         - status
 
+    VideoInput:
+      type: object
+      required:
+        - youtubeUrl
+      properties:
+        youtubeUrl:
+          type: string
+          description: YouTube video URL
+
+    Video:
+      type: object
+      required:
+        - id
+        - youtubeUrl
+        - videoId
+        - title
+        - status
+        - createdAt
+      properties:
+        id:
+          type: integer
+        youtubeUrl:
+          type: string
+        videoId:
+          type: string
+        title:
+          type: string
+        thumbnail:
+          type: ["string", "null"]
+        channelName:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, processing, done, error]
+        errorMessage:
+          type: ["string", "null"]
+        flashcardCount:
+          type: integer
+        knownCount:
+          type: integer
+        createdAt:
+          type: string
+
+    VideoDetail:
+      type: object
+      required:
+        - id
+        - youtubeUrl
+        - videoId
+        - title
+        - status
+        - createdAt
+        - flashcards
+      properties:
+        id:
+          type: integer
+        youtubeUrl:
+          type: string
+        videoId:
+          type: string
+        title:
+          type: string
+        thumbnail:
+          type: ["string", "null"]
+        channelName:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, processing, done, error]
+        errorMessage:
+          type: ["string", "null"]
+        summary:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        flashcards:
+          type: array
+          items:
+            $ref: "#/components/schemas/Flashcard"
+
+    Flashcard:
+      type: object
+      required:
+        - id
+        - videoId
+        - question
+        - answer
+        - known
+        - reviewCount
+        - createdAt
+      properties:
+        id:
+          type: integer
+        videoId:
+          type: integer
+        question:
+          type: string
+        answer:
+          type: string
+        known:
+          type: boolean
+        reviewCount:
+          type: integer
+        createdAt:
+          type: string
+
+    FlashcardReview:
+      type: object
+      required:
+        - known
+      properties:
+        known:
+          type: boolean
+
+    Stats:
+      type: object
+      required:
+        - totalVideos
+        - totalFlashcards
+        - knownFlashcards
+        - unknownFlashcards
+        - videosProcessed
+      properties:
+        totalVideos:
+          type: integer
+        totalFlashcards:
+          type: integer
+        knownFlashcards:
+          type: integer
+        unknownFlashcards:
+          type: integer
+        videosProcessed:
+          type: integer
