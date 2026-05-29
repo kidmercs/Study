@@ -43,7 +43,8 @@ export const CreateSourceBody = zod.object({
   "sourceType": zod.enum(['youtube', 'text']),
   "youtubeUrl": zod.string().nullish().describe('YouTube URL (required when sourceType is youtube)'),
   "textTitle": zod.string().nullish().describe('Title for the text source (required when sourceType is text)'),
-  "textContent": zod.string().nullish().describe('Raw text content to generate flashcards from (required when sourceType is text)')
+  "textContent": zod.string().nullish().describe('Raw text content to generate flashcards from (required when sourceType is text)'),
+  "maxFlashcards": zod.number().nullish().describe('Maximum number of flashcards to generate (5-30, default 10)')
 })
 
 

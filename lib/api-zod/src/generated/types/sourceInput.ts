@@ -24,4 +24,9 @@ export interface SourceInput {
      * @nullable
      */
   textContent?: string | null;
+  /**
+     * Maximum number of flashcards to generate (5-30, default 10)
+     * @nullable
+     */
+  maxFlashcards?: number | null;
 }

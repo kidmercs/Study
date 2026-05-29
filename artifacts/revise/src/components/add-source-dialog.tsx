@@ -26,17 +26,52 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Link2, FileText, Loader2 } from "lucide-react";
 
+const CARD_COUNT_OPTIONS = [5, 10, 15, 20, 25, 30] as const;
+
 const youtubeSchema = z.object({
   youtubeUrl: z.string().url({ message: "Please enter a valid URL." }).min(1, "Required"),
+  maxFlashcards: z.number().min(5).max(30),
 });
 
 const textSchema = z.object({
   textTitle: z.string().min(1, "Title is required").max(100),
   textContent: z.string().min(10, "Text content must be at least 10 characters"),
+  maxFlashcards: z.number().min(5).max(30),
 });
 
 interface AddSourceDialogProps {
   children?: React.ReactNode;
+}
+
+function CardCountPicker({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+}) {
+  return (
+    <div>
+      <p className="text-sm font-medium mb-2 text-foreground">Number of flashcards</p>
+      <div className="flex flex-wrap gap-2">
+        {CARD_COUNT_OPTIONS.map((n) => (
+          <button
+            key={n}
+            type="button"
+            onClick={() => onChange(n)}
+            className={[
+              "px-3 py-1 rounded-md text-sm font-semibold border transition-colors",
+              value === n
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-background text-muted-foreground border-border hover:border-primary/60 hover:text-foreground",
+            ].join(" ")}
+          >
+            {n}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function AddSourceDialog({ children }: AddSourceDialogProps) {
@@ -48,12 +83,12 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
 
   const youtubeForm = useForm<z.infer<typeof youtubeSchema>>({
     resolver: zodResolver(youtubeSchema),
-    defaultValues: { youtubeUrl: "" },
+    defaultValues: { youtubeUrl: "", maxFlashcards: 10 },
   });
 
   const textForm = useForm<z.infer<typeof textSchema>>({
     resolver: zodResolver(textSchema),
-    defaultValues: { textTitle: "", textContent: "" },
+    defaultValues: { textTitle: "", textContent: "", maxFlashcards: 10 },
   });
 
   const onSubmitYoutube = (values: z.infer<typeof youtubeSchema>) => {
@@ -62,6 +97,7 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
         data: {
           sourceType: "youtube",
           youtubeUrl: values.youtubeUrl,
+          maxFlashcards: values.maxFlashcards,
         },
       },
       {
@@ -85,6 +121,7 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
           sourceType: "text",
           textTitle: values.textTitle,
           textContent: values.textContent,
+          maxFlashcards: values.maxFlashcards,
         },
       },
       {
@@ -110,7 +147,7 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
         <DialogHeader>
           <DialogTitle>Add a new study source</DialogTitle>
         </DialogHeader>
-        <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="mt-4">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as "youtube" | "text")} className="mt-4">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="youtube" data-testid="tab-youtube">
               <Link2 className="w-4 h-4 mr-2" />
@@ -121,10 +158,10 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
               Text Document
             </TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="youtube">
             <Form {...youtubeForm}>
-              <form onSubmit={youtubeForm.handleSubmit(onSubmitYoutube)} className="space-y-4 pt-4">
+              <form onSubmit={youtubeForm.handleSubmit(onSubmitYoutube)} className="space-y-5 pt-4">
                 <FormField
                   control={youtubeForm.control}
                   name="youtubeUrl"
@@ -132,14 +169,33 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
                     <FormItem>
                       <FormLabel>YouTube URL</FormLabel>
                       <FormControl>
-                        <Input placeholder="https://youtube.com/watch?v=..." {...field} data-testid="input-youtube-url" />
+                        <Input
+                          placeholder="https://youtube.com/watch?v=..."
+                          {...field}
+                          data-testid="input-youtube-url"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                <div className="flex justify-end pt-2">
-                  <Button type="submit" disabled={createSource.isPending} data-testid="button-submit-youtube">
+                <FormField
+                  control={youtubeForm.control}
+                  name="maxFlashcards"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <CardCountPicker value={field.value} onChange={field.onChange} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <div className="flex justify-end pt-1">
+                  <Button
+                    type="submit"
+                    disabled={createSource.isPending}
+                    data-testid="button-submit-youtube"
+                  >
                     {createSource.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                     Generate Flashcards
                   </Button>
@@ -147,10 +203,10 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
               </form>
             </Form>
           </TabsContent>
-          
+
           <TabsContent value="text">
             <Form {...textForm}>
-              <form onSubmit={textForm.handleSubmit(onSubmitText)} className="space-y-4 pt-4">
+              <form onSubmit={textForm.handleSubmit(onSubmitText)} className="space-y-5 pt-4">
                 <FormField
                   control={textForm.control}
                   name="textTitle"
@@ -158,7 +214,11 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
                     <FormItem>
                       <FormLabel>Document Title</FormLabel>
                       <FormControl>
-                        <Input placeholder="E.g., Chapter 4: Cellular Respiration" {...field} data-testid="input-text-title" />
+                        <Input
+                          placeholder="E.g., Chapter 4: Cellular Respiration"
+                          {...field}
+                          data-testid="input-text-title"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -171,10 +231,10 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
                     <FormItem>
                       <FormLabel>Text Content</FormLabel>
                       <FormControl>
-                        <Textarea 
-                          placeholder="Paste your study material here..." 
-                          className="min-h-[150px] resize-none"
-                          {...field} 
+                        <Textarea
+                          placeholder="Paste your study material here..."
+                          className="min-h-[130px] resize-none"
+                          {...field}
                           data-testid="input-text-content"
                         />
                       </FormControl>
@@ -182,8 +242,23 @@ export function AddSourceDialog({ children }: AddSourceDialogProps) {
                     </FormItem>
                   )}
                 />
-                <div className="flex justify-end pt-2">
-                  <Button type="submit" disabled={createSource.isPending} data-testid="button-submit-text">
+                <FormField
+                  control={textForm.control}
+                  name="maxFlashcards"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <CardCountPicker value={field.value} onChange={field.onChange} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <div className="flex justify-end pt-1">
+                  <Button
+                    type="submit"
+                    disabled={createSource.isPending}
+                    data-testid="button-submit-text"
+                  >
                     {createSource.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                     Generate Flashcards
                   </Button>

@@ -80,7 +80,8 @@ router.post("/sources", async (req, res): Promise<void> => {
     return;
   }
 
-  const { sourceType, youtubeUrl, textTitle, textContent } = parsed.data;
+  const { sourceType, youtubeUrl, textTitle, textContent, maxFlashcards } = parsed.data;
+  const cardLimit = Math.min(30, Math.max(5, maxFlashcards ?? 10));
 
   if (sourceType === "youtube") {
     if (!youtubeUrl) {
@@ -121,7 +122,7 @@ router.post("/sources", async (req, res): Promise<void> => {
           fetchTranscript(videoId),
         ]);
         const summary = generateSummary(transcript);
-        const cards = generateFlashcards(transcript);
+        const cards = generateFlashcards(transcript, cardLimit);
 
         await db
           .update(sourcesTable)
@@ -152,7 +153,7 @@ router.post("/sources", async (req, res): Promise<void> => {
   }
 
   const summary = generateSummary(textContent);
-  const cards = generateFlashcards(textContent);
+  const cards = generateFlashcards(textContent, cardLimit);
 
   const [source] = await db
     .insert(sourcesTable)
