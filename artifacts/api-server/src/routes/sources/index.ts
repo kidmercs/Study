@@ -135,9 +135,14 @@ router.post("/sources", async (req, res): Promise<void> => {
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
+        const friendly = msg.includes("503") || msg.includes("UNAVAILABLE")
+          ? "Gemini is temporarily overloaded. Please retry in a moment."
+          : msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED")
+          ? "API rate limit reached. Please wait a minute before retrying."
+          : msg.slice(0, 200);
         await db
           .update(sourcesTable)
-          .set({ status: "error", errorMessage: msg, title: "Error processing video" })
+          .set({ status: "error", errorMessage: friendly, title: "Error processing video" })
           .where(eq(sourcesTable.id, source.id));
       }
     });
@@ -223,6 +228,85 @@ router.get("/sources/:id", async (req, res): Promise<void> => {
       })),
     })
   );
+});
+
+router.post("/sources/:id/retry", async (req, res): Promise<void> => {
+  const params = GetSourceParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [source] = await db.select().from(sourcesTable).where(eq(sourcesTable.id, params.data.id));
+  if (!source) {
+    res.status(404).json({ error: "Source not found" });
+    return;
+  }
+  if (source.status === "processing") {
+    res.status(409).json({ error: "Source is already processing" });
+    return;
+  }
+
+  // Reset to processing
+  await db
+    .update(sourcesTable)
+    .set({ status: "processing", errorMessage: null })
+    .where(eq(sourcesTable.id, source.id));
+
+  res.json({ ok: true });
+
+  // Re-run processing async
+  setImmediate(async () => {
+    try {
+      let text: string;
+      const cardLimit = 10; // default on retry
+
+      if (source.sourceType === "youtube") {
+        const videoId = source.videoId!;
+        const [meta, transcript] = await Promise.all([
+          fetchVideoMeta(videoId),
+          fetchTranscript(videoId),
+        ]);
+        text = transcript;
+        const { summary, flashcards: cards } = await processContent(text, cardLimit);
+        await db
+          .update(sourcesTable)
+          .set({ title: meta.title, thumbnail: meta.thumbnail, channelName: meta.channelName, summary, status: "done" })
+          .where(eq(sourcesTable.id, source.id));
+        if (cards.length > 0) {
+          // Remove old cards first
+          await db.delete(flashcardsTable).where(eq(flashcardsTable.sourceId, source.id));
+          await db.insert(flashcardsTable).values(
+            cards.map((c) => ({ sourceId: source.id, question: c.question, answer: c.answer }))
+          );
+        }
+      } else {
+        text = source.rawText ?? "";
+        const { summary, flashcards: cards } = await processContent(text, cardLimit);
+        await db
+          .update(sourcesTable)
+          .set({ summary, status: "done" })
+          .where(eq(sourcesTable.id, source.id));
+        if (cards.length > 0) {
+          await db.delete(flashcardsTable).where(eq(flashcardsTable.sourceId, source.id));
+          await db.insert(flashcardsTable).values(
+            cards.map((c) => ({ sourceId: source.id, question: c.question, answer: c.answer }))
+          );
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const friendly = msg.includes("503") || msg.includes("UNAVAILABLE")
+        ? "Gemini is temporarily overloaded. Please retry in a moment."
+        : msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED")
+        ? "API rate limit reached. Please wait a minute before retrying."
+        : msg.slice(0, 200);
+      await db
+        .update(sourcesTable)
+        .set({ status: "error", errorMessage: friendly })
+        .where(eq(sourcesTable.id, source.id));
+    }
+  });
 });
 
 router.delete("/sources/:id", async (req, res): Promise<void> => {

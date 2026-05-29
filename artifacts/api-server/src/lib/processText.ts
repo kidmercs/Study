@@ -46,57 +46,61 @@ Text:
 ${trimmed}
 """`;
 
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
-    config: {
-      // Use enough tokens for 100 cards (each ~80 tokens) + summary
-      maxOutputTokens: 32768,
-      responseMimeType: "application/json",
-    },
-  });
+  // Retry up to 4 times on transient errors (503, 429) with exponential backoff
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt > 0) await sleep(Math.pow(2, attempt) * 1500); // 3s, 6s, 12s
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: {
+          maxOutputTokens: 32768,
+          responseMimeType: "application/json",
+        },
+      });
 
-  const raw = (response.text ?? "").trim();
+      const raw = (response.text ?? "").trim();
+      const cleaned = raw
+        .replace(/^```(?:json)?\s*/i, "")
+        .replace(/\s*```\s*$/i, "")
+        .trim();
 
-  // Strip any accidental markdown fences
-  const cleaned = raw
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```\s*$/i, "")
-    .trim();
+      if (!cleaned) throw new Error("Gemini returned an empty response");
 
-  if (!cleaned) {
-    throw new Error("Gemini returned an empty response");
-  }
-
-  let parsed: { summary?: unknown; flashcards?: unknown };
-  try {
-    parsed = JSON.parse(cleaned) as { summary?: unknown; flashcards?: unknown };
-  } catch (parseErr) {
-    throw new Error(
-      `Gemini returned invalid JSON (first 300 chars): ${cleaned.slice(0, 300)}`
-    );
-  }
-
-  const summary =
-    typeof parsed.summary === "string" ? parsed.summary.trim() : "";
-
-  const flashcards: GeneratedFlashcard[] = [];
-  if (Array.isArray(parsed.flashcards)) {
-    for (const item of parsed.flashcards) {
-      if (
-        item &&
-        typeof item === "object" &&
-        typeof (item as Record<string, unknown>).question === "string" &&
-        typeof (item as Record<string, unknown>).answer === "string"
-      ) {
-        const q = String((item as Record<string, unknown>).question).trim();
-        const a = String((item as Record<string, unknown>).answer).trim();
-        if (q && a) flashcards.push({ question: q, answer: a });
+      let parsed: { summary?: unknown; flashcards?: unknown };
+      try {
+        parsed = JSON.parse(cleaned) as { summary?: unknown; flashcards?: unknown };
+      } catch {
+        throw new Error(`Gemini returned invalid JSON: ${cleaned.slice(0, 200)}`);
       }
+
+      const summary = typeof parsed.summary === "string" ? parsed.summary.trim() : "";
+      const flashcards: GeneratedFlashcard[] = [];
+      if (Array.isArray(parsed.flashcards)) {
+        for (const item of parsed.flashcards) {
+          if (
+            item &&
+            typeof item === "object" &&
+            typeof (item as Record<string, unknown>).question === "string" &&
+            typeof (item as Record<string, unknown>).answer === "string"
+          ) {
+            const q = String((item as Record<string, unknown>).question).trim();
+            const a = String((item as Record<string, unknown>).answer).trim();
+            if (q && a) flashcards.push({ question: q, answer: a });
+          }
+        }
+      }
+      return { summary, flashcards };
+    } catch (err) {
+      lastErr = err;
+      const msg = String(err instanceof Error ? err.message : err);
+      const isTransient = msg.includes("503") || msg.includes("429") || msg.includes("UNAVAILABLE") || msg.includes("RESOURCE_EXHAUSTED");
+      if (!isTransient) throw err; // Don't retry on permanent errors
     }
   }
-
-  return { summary, flashcards };
+  throw lastErr;
 }
 
 export function extractVideoId(url: string): string | null {

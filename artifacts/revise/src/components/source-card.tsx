@@ -6,7 +6,7 @@ import type { Source } from "@workspace/api-client-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Trash2, FileText, Youtube, Clock, AlertCircle, Loader2 } from "lucide-react";
+import { Trash2, FileText, Youtube, AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,6 +28,7 @@ export function SourceCard({ source }: SourceCardProps) {
   const deleteSource = useDeleteSource();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [retrying, setRetrying] = React.useState(false);
 
   const isReady = source.status === "done";
   const isProcessing = source.status === "processing" || source.status === "pending";
@@ -36,7 +37,7 @@ export function SourceCard({ source }: SourceCardProps) {
   const progress = source.flashcardCount > 0 ? (source.knownCount / source.flashcardCount) * 100 : 0;
 
   const handleDelete = (e: React.MouseEvent) => {
-    e.preventDefault(); // Prevent navigating if wrapped in Link (though we will wrap buttons)
+    e.preventDefault();
     deleteSource.mutate(
       { id: source.id },
       {
@@ -51,11 +52,33 @@ export function SourceCard({ source }: SourceCardProps) {
     );
   };
 
+  const handleRetry = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    setRetrying(true);
+    try {
+      const res = await fetch(`/api/sources/${source.id}/retry`, { method: "POST" });
+      if (!res.ok) throw new Error("Retry failed");
+      queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey() });
+      toast({ title: "Retrying", description: "Processing started again..." });
+    } catch {
+      toast({ title: "Error", description: "Could not retry. Please try again.", variant: "destructive" });
+    } finally {
+      setRetrying(false);
+    }
+  };
+
   const content = (
-    <Card className={`group relative overflow-hidden flex flex-col transition-all duration-300 hover-elevate ${!isReady ? 'opacity-80' : ''}`} data-testid={`card-source-${source.id}`}>
+    <Card
+      className={`group relative overflow-hidden flex flex-col transition-all duration-300 hover-elevate ${!isReady ? "opacity-80" : ""}`}
+      data-testid={`card-source-${source.id}`}
+    >
       {source.sourceType === "youtube" && source.thumbnail ? (
         <div className="w-full h-32 bg-muted relative overflow-hidden">
-          <img src={source.thumbnail} alt={source.title} className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500" />
+          <img
+            src={source.thumbnail}
+            alt={source.title}
+            className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+          />
           <div className="absolute inset-0 bg-black/20" />
           <div className="absolute top-2 left-2 bg-background/90 backdrop-blur-sm px-2 py-1 rounded-md text-xs font-medium flex items-center gap-1">
             <Youtube className="w-3 h-3 text-red-500" />
@@ -95,15 +118,31 @@ export function SourceCard({ source }: SourceCardProps) {
               <span>Processing...</span>
             </div>
           ) : isError ? (
-            <div className="flex items-center gap-2 text-sm text-destructive font-medium">
-              <AlertCircle className="w-4 h-4" />
-              <span className="line-clamp-1">{source.errorMessage || "Failed to process"}</span>
+            <div className="space-y-2">
+              <div className="flex items-start gap-2 text-sm text-destructive font-medium">
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                <span className="line-clamp-2 text-xs">
+                  {source.errorMessage?.startsWith("{")
+                    ? "AI service temporarily unavailable."
+                    : source.errorMessage || "Failed to process"}
+                </span>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full h-7 text-xs gap-1.5"
+                onClick={handleRetry}
+                disabled={retrying}
+              >
+                {retrying ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                Retry
+              </Button>
             </div>
           ) : null}
         </div>
       </div>
-      
-      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10" onClick={e => e.preventDefault()}>
+
+      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10" onClick={(e) => e.preventDefault()}>
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="destructive" size="icon" className="h-8 w-8 rounded-full shadow-sm">
