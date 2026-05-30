@@ -49,6 +49,49 @@ async function fetchTranscript(videoId: string): Promise<string> {
   return items.map((i: { text: string }) => i.text).join(" ");
 }
 
+async function fetchVideoDescription(videoId: string): Promise<string> {
+  try {
+    const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+    });
+    if (!res.ok) return "";
+    const html = await res.text();
+
+    // Extract shortDescription from ytInitialPlayerResponse embedded JSON
+    const match = html.match(/"shortDescription":"((?:[^"\\]|\\.)*)"/);
+    if (match?.[1]) {
+      return match[1]
+        .replace(/\\n/g, "\n")
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, "\\")
+        .trim();
+    }
+    return "";
+  } catch {
+    return "";
+  }
+}
+
+async function getYouTubeText(videoId: string, title: string): Promise<{ text: string; usedFallback: boolean }> {
+  try {
+    const transcript = await fetchTranscript(videoId);
+    if (transcript.trim().length > 50) return { text: transcript, usedFallback: false };
+  } catch {
+    // fall through to description fallback
+  }
+
+  const description = await fetchVideoDescription(videoId);
+  const combined = [
+    `Video title: ${title}`,
+    description ? `Video description:\n${description}` : "",
+  ].filter(Boolean).join("\n\n");
+
+  return { text: combined, usedFallback: true };
+}
+
 async function fetchVideoMeta(videoId: string): Promise<{ title: string; thumbnail: string; channelName: string }> {
   try {
     const res = await fetch(
@@ -195,10 +238,16 @@ router.post("/sources", async (req, res): Promise<void> => {
       .returning();
 
     try {
-      const [meta, transcript] = await Promise.all([fetchVideoMeta(videoId), fetchTranscript(videoId)]);
-      const result = await processContent(transcript, processOptions);
+      const meta = await fetchVideoMeta(videoId);
+      const { text, usedFallback } = await getYouTubeText(videoId, meta.title);
+      const result = await processContent(text, processOptions);
       await db.update(sourcesTable)
-        .set({ title: meta.title, thumbnail: meta.thumbnail, channelName: meta.channelName })
+        .set({
+          title: meta.title,
+          thumbnail: meta.thumbnail,
+          channelName: meta.channelName,
+          ...(usedFallback ? { errorMessage: "No transcript available — content generated from video description." } : {}),
+        })
         .where(eq(sourcesTable.id, source.id));
       await saveProcessedContent(source.id, result);
       const [done] = await db.select().from(sourcesTable).where(eq(sourcesTable.id, source.id));
@@ -308,11 +357,17 @@ router.post("/sources/:id/retry", async (req, res): Promise<void> => {
     const retryOptions = { generateFlashcards: true, generateMindMap: true, generateQuiz: true, maxFlashcards: 10, maxQuestions: 5 };
     if (source.sourceType === "youtube") {
       const videoId = source.videoId!;
-      const [meta, transcript] = await Promise.all([fetchVideoMeta(videoId), fetchTranscript(videoId)]);
-      await db.update(sourcesTable).set({ title: meta.title, thumbnail: meta.thumbnail, channelName: meta.channelName }).where(eq(sourcesTable.id, source.id));
+      const meta = await fetchVideoMeta(videoId);
+      const { text, usedFallback } = await getYouTubeText(videoId, meta.title);
+      await db.update(sourcesTable).set({
+        title: meta.title,
+        thumbnail: meta.thumbnail,
+        channelName: meta.channelName,
+        errorMessage: usedFallback ? "No transcript available — content generated from video description." : null,
+      }).where(eq(sourcesTable.id, source.id));
       await db.delete(flashcardsTable).where(eq(flashcardsTable.sourceId, source.id));
       await db.delete(questionsTable).where(eq(questionsTable.sourceId, source.id));
-      const result = await processContent(transcript, retryOptions);
+      const result = await processContent(text, retryOptions);
       await saveProcessedContent(source.id, result);
     } else {
       const text = source.rawText ?? "";
