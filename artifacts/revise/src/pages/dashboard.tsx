@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "wouter";
-import { useListSources, useGetStats, getListSourcesQueryKey } from "@workspace/api-client-react";
+import { useListSources, useGetStats, getListSourcesQueryKey, getGetStatsQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SourceCard } from "@/components/source-card";
@@ -13,7 +13,9 @@ export default function Dashboard() {
   const { user: maybeUser } = useUser();
   const user = maybeUser!;
 
-  const { data: stats, isLoading: statsLoading } = useGetStats();
+  const { data: stats, isLoading: statsLoading } = useGetStats({
+    query: { queryKey: [...getGetStatsQueryKey(), user.id] }
+  });
   
   const { data: sources, isLoading: sourcesLoading } = useListSources({
     query: {

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback } from "react";
 import { setExtraHeadersGetter } from "@workspace/api-client-react";
 
 export interface AppUser {
@@ -14,6 +14,14 @@ export const USERS: AppUser[] = [
 
 const STORAGE_KEY = "revise_user_id";
 
+function applyUser(user: AppUser | null) {
+  if (user) {
+    setExtraHeadersGetter(() => ({ "x-user-id": String(user.id) }));
+  } else {
+    setExtraHeadersGetter(null);
+  }
+}
+
 interface UserContextValue {
   user: AppUser | null;
   setUser: (user: AppUser) => void;
@@ -27,27 +35,22 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) return null;
     const id = parseInt(stored, 10);
-    return USERS.find((u) => u.id === id) ?? null;
+    const found = USERS.find((u) => u.id === id) ?? null;
+    applyUser(found);
+    return found;
   });
 
   const setUser = useCallback((next: AppUser) => {
     localStorage.setItem(STORAGE_KEY, String(next.id));
+    applyUser(next);
     setUserState(next);
   }, []);
 
   const clearUser = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
+    applyUser(null);
     setUserState(null);
   }, []);
-
-  useEffect(() => {
-    if (!user) {
-      setExtraHeadersGetter(null);
-      return;
-    }
-    setExtraHeadersGetter(() => ({ "x-user-id": String(user.id) }));
-    return () => setExtraHeadersGetter(null);
-  }, [user]);
 
   return (
     <UserContext.Provider value={{ user, setUser, clearUser }}>
