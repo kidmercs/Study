@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, Check } from "lucide-react";
+import { ChevronDown, Check, LogOut } from "lucide-react";
 
 function initials(name: string) {
   return name.slice(0, 2).toUpperCase();
@@ -22,13 +22,20 @@ const AVATAR_COLORS = [
 ];
 
 export function UserSwitcher() {
-  const { user, setUser } = useUser();
+  const { user, setUser, clearUser } = useUser();
   const queryClient = useQueryClient();
 
+  if (!user) return null;
+
   function switchUser(next: AppUser) {
-    if (next.id === user.id) return;
+    if (next.id === user!.id) return;
     setUser(next);
     queryClient.invalidateQueries();
+  }
+
+  function handleSignOut() {
+    queryClient.clear();
+    clearUser();
   }
 
   const colorClass = AVATAR_COLORS[(user.id - 1) % AVATAR_COLORS.length];
@@ -44,8 +51,8 @@ export function UserSwitcher() {
           <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-44">
-        <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Switch user</DropdownMenuLabel>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Switch profile</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {USERS.map((u, i) => (
           <DropdownMenuItem
@@ -60,6 +67,14 @@ export function UserSwitcher() {
             {u.id === user.id && <Check className="w-3.5 h-3.5 text-primary" />}
           </DropdownMenuItem>
         ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={handleSignOut}
+          className="flex items-center gap-2 cursor-pointer text-muted-foreground"
+        >
+          <LogOut className="w-4 h-4" />
+          <span>Back to profiles</span>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -10,7 +10,8 @@ import { useUser } from "@/contexts/user-context";
 import { BookOpen, BrainCircuit, Library, Loader2 } from "lucide-react";
 
 export default function Dashboard() {
-  const { user } = useUser();
+  const { user: maybeUser } = useUser();
+  const user = maybeUser!;
 
   const { data: stats, isLoading: statsLoading } = useGetStats();
   

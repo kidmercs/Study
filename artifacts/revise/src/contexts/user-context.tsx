@@ -15,17 +15,19 @@ export const USERS: AppUser[] = [
 const STORAGE_KEY = "revise_user_id";
 
 interface UserContextValue {
-  user: AppUser;
+  user: AppUser | null;
   setUser: (user: AppUser) => void;
+  clearUser: () => void;
 }
 
 const UserContext = createContext<UserContextValue | null>(null);
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUserState] = useState<AppUser>(() => {
+  const [user, setUserState] = useState<AppUser | null>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
-    const id = stored ? parseInt(stored, 10) : 1;
-    return USERS.find((u) => u.id === id) ?? USERS[0];
+    if (!stored) return null;
+    const id = parseInt(stored, 10);
+    return USERS.find((u) => u.id === id) ?? null;
   });
 
   const setUser = useCallback((next: AppUser) => {
@@ -33,14 +35,22 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     setUserState(next);
   }, []);
 
-  // Register header getter so every API request carries X-User-Id
+  const clearUser = useCallback(() => {
+    localStorage.removeItem(STORAGE_KEY);
+    setUserState(null);
+  }, []);
+
   useEffect(() => {
+    if (!user) {
+      setExtraHeadersGetter(null);
+      return;
+    }
     setExtraHeadersGetter(() => ({ "x-user-id": String(user.id) }));
     return () => setExtraHeadersGetter(null);
-  }, [user.id]);
+  }, [user]);
 
   return (
-    <UserContext.Provider value={{ user, setUser }}>
+    <UserContext.Provider value={{ user, setUser, clearUser }}>
       {children}
     </UserContext.Provider>
   );
