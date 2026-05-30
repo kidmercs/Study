@@ -17,7 +17,6 @@ const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
 let _baseUrl: string | null = null;
 let _authTokenGetter: AuthTokenGetter | null = null;
-let _extraHeadersGetter: (() => Record<string, string> | Promise<Record<string, string>>) | null = null;
 
 /**
  * Set a base URL that is prepended to every relative request URL
@@ -28,16 +27,6 @@ let _extraHeadersGetter: (() => Record<string, string> | Promise<Record<string, 
  */
 export function setBaseUrl(url: string | null): void {
   _baseUrl = url ? url.replace(/\/+$/, "") : null;
-}
-
-/**
- * Register a getter that supplies extra headers to attach to every request.
- * Pass `null` to clear it.
- */
-export function setExtraHeadersGetter(
-  getter: (() => Record<string, string> | Promise<Record<string, string>>) | null
-): void {
-  _extraHeadersGetter = getter;
 }
 
 /**
@@ -366,16 +355,6 @@ export async function customFetch<T = unknown>(
     const token = await _authTokenGetter();
     if (token) {
       headers.set("authorization", `Bearer ${token}`);
-    }
-  }
-
-  // Attach any extra headers (e.g. X-User-Id for user scoping).
-  if (_extraHeadersGetter) {
-    const extra = await _extraHeadersGetter();
-    for (const [key, value] of Object.entries(extra)) {
-      if (!headers.has(key)) {
-        headers.set(key, value);
-      }
     }
   }
 
