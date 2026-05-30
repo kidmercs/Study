@@ -1,22 +1,28 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Revise API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: users
+    description: User operations
+  - name: sources
+    description: Study source operations
+  - name: flashcards
+    description: Flashcard operations
+  - name: questions
+    description: Practice question operations
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +30,132 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+
+  /sources:
+    get:
+      operationId: listSources
+      tags: [sources]
+      summary: List all study sources
+      responses:
+        "200":
+          description: List of sources
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Source"
+    post:
+      operationId: createSource
+      tags: [sources]
+      summary: Submit a YouTube URL or plain text for flashcard generation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SourceInput"
+      responses:
+        "201":
+          description: Source created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Source"
+        "400":
+          description: Invalid request
+
+  /sources/{id}:
+    get:
+      operationId: getSource
+      tags: [sources]
+      summary: Get a source with its summary, flashcards, mind map, and practice questions
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Source detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SourceDetail"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteSource
+      tags: [sources]
+      summary: Delete a source and its flashcards
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /flashcards/{id}/review:
+    patch:
+      operationId: reviewFlashcard
+      tags: [flashcards]
+      summary: Mark a flashcard as known or unknown
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FlashcardReview"
+      responses:
+        "200":
+          description: Updated flashcard
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Flashcard"
+        "404":
+          description: Not found
+
+  /stats:
+    get:
+      operationId: getStats
+      tags: [sources]
+      summary: Get study statistics
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stats"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +166,255 @@ components:
       required:
         - status
 
+    SourceInput:
+      type: object
+      required:
+        - sourceType
+      properties:
+        sourceType:
+          type: string
+          enum: [youtube, text, pdf, pastpaper]
+        youtubeUrl:
+          type: ["string", "null"]
+          description: YouTube URL (required when sourceType is youtube)
+        textTitle:
+          type: ["string", "null"]
+          description: Title for the text/pdf source (required when sourceType is text or pdf)
+        textContent:
+          type: ["string", "null"]
+          description: Raw text content to generate study materials from (required when sourceType is text or pdf)
+        maxFlashcards:
+          type: ["integer", "null"]
+          description: Maximum number of flashcards to generate (5-100, default 10)
+        maxQuestions:
+          type: ["integer", "null"]
+          description: Number of practice questions to generate (3-20, default 5)
+        generateFlashcards:
+          type: ["boolean", "null"]
+          description: Whether to generate flashcards (default true)
+        generateMindMap:
+          type: ["boolean", "null"]
+          description: Whether to generate a mind map (default true)
+        generateQuiz:
+          type: ["boolean", "null"]
+          description: Whether to generate practice questions (default true)
+        generatePastPaper:
+          type: ["boolean", "null"]
+          description: Whether to extract past paper questions and mark scheme (default false)
+
+    Source:
+      type: object
+      required:
+        - id
+        - sourceType
+        - title
+        - status
+        - flashcardCount
+        - knownCount
+        - createdAt
+      properties:
+        id:
+          type: integer
+        sourceType:
+          type: string
+          enum: [youtube, text, pdf, pastpaper]
+        youtubeUrl:
+          type: ["string", "null"]
+        videoId:
+          type: ["string", "null"]
+        title:
+          type: string
+        thumbnail:
+          type: ["string", "null"]
+        channelName:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, processing, done, error]
+        errorMessage:
+          type: ["string", "null"]
+        flashcardCount:
+          type: integer
+        knownCount:
+          type: integer
+        createdAt:
+          type: string
+
+    SourceDetail:
+      type: object
+      required:
+        - id
+        - sourceType
+        - title
+        - status
+        - createdAt
+        - flashcards
+        - questions
+        - pastPaperQuestions
+        - flashcardCount
+        - knownCount
+      properties:
+        id:
+          type: integer
+        sourceType:
+          type: string
+          enum: [youtube, text, pdf, pastpaper]
+        youtubeUrl:
+          type: ["string", "null"]
+        videoId:
+          type: ["string", "null"]
+        title:
+          type: string
+        thumbnail:
+          type: ["string", "null"]
+        channelName:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, processing, done, error]
+        errorMessage:
+          type: ["string", "null"]
+        summary:
+          type: ["string", "null"]
+        mindMap:
+          type: ["string", "null"]
+          description: JSON string containing the mind map tree structure
+        createdAt:
+          type: string
+        flashcardCount:
+          type: integer
+        knownCount:
+          type: integer
+        flashcards:
+          type: array
+          items:
+            $ref: "#/components/schemas/Flashcard"
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeQuestion"
+        pastPaperQuestions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PastPaperQuestion"
+
+    Flashcard:
+      type: object
+      required:
+        - id
+        - sourceId
+        - question
+        - answer
+        - known
+        - reviewCount
+        - createdAt
+      properties:
+        id:
+          type: integer
+        sourceId:
+          type: integer
+        question:
+          type: string
+        answer:
+          type: string
+        known:
+          type: boolean
+        reviewCount:
+          type: integer
+        createdAt:
+          type: string
+
+    FlashcardReview:
+      type: object
+      required:
+        - known
+      properties:
+        known:
+          type: boolean
+
+    PracticeQuestion:
+      type: object
+      required:
+        - id
+        - sourceId
+        - question
+        - options
+        - correctIndex
+        - explanation
+        - createdAt
+      properties:
+        id:
+          type: integer
+        sourceId:
+          type: integer
+        question:
+          type: string
+        options:
+          type: array
+          items:
+            type: string
+        correctIndex:
+          type: integer
+        explanation:
+          type: string
+        createdAt:
+          type: string
+
+    PastPaperQuestion:
+      type: object
+      required:
+        - id
+        - sourceId
+        - questionNumber
+        - question
+        - markScheme
+        - createdAt
+      properties:
+        id:
+          type: integer
+        sourceId:
+          type: integer
+        questionNumber:
+          type: string
+        question:
+          type: string
+        markScheme:
+          type: string
+        marks:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+
+    User:
+      type: object
+      required:
+        - id
+        - name
+        - createdAt
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        createdAt:
+          type: string
+
+    Stats:
+      type: object
+      required:
+        - totalSources
+        - totalFlashcards
+        - knownFlashcards
+        - unknownFlashcards
+        - sourcesProcessed
+      properties:
+        totalSources:
+          type: integer
+        totalFlashcards:
+          type: integer
+        knownFlashcards:
+          type: integer
+        unknownFlashcards:
+          type: integer
+        sourcesProcessed:
+          type: integer
