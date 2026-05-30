@@ -193,6 +193,12 @@ export interface FlashcardReview {
   known: boolean;
 }
 
+export interface User {
+  id: number;
+  name: string;
+  createdAt: string;
+}
+
 export interface Stats {
   totalSources: number;
   totalFlashcards: number;

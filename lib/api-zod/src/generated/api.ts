@@ -17,6 +17,17 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * @summary List all users
+ */
+export const ListUsersResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "createdAt": zod.string()
+})
+export const ListUsersResponse = zod.array(ListUsersResponseItem)
+
+
+/**
  * @summary List all study sources
  */
 export const ListSourcesResponseItem = zod.object({

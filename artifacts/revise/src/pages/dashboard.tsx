@@ -1,18 +1,22 @@
-import React, { useState } from "react";
+import React from "react";
 import { Link } from "wouter";
 import { useListSources, useGetStats, getListSourcesQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SourceCard } from "@/components/source-card";
 import { AddSourceDialog } from "@/components/add-source-dialog";
+import { UserSwitcher } from "@/components/user-switcher";
+import { useUser } from "@/contexts/user-context";
 import { BookOpen, BrainCircuit, Library, Loader2 } from "lucide-react";
 
 export default function Dashboard() {
+  const { user } = useUser();
+
   const { data: stats, isLoading: statsLoading } = useGetStats();
   
   const { data: sources, isLoading: sourcesLoading } = useListSources({
     query: {
-      queryKey: getListSourcesQueryKey(),
+      queryKey: [...getListSourcesQueryKey(), user.id],
       refetchInterval: (query) => {
         const data = query.state.data;
         if (data && Array.isArray(data)) {
@@ -41,9 +45,10 @@ export default function Dashboard() {
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-12">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Library</h1>
-          <p className="text-muted-foreground mt-2">Your dedicated study environment.</p>
+          <p className="text-muted-foreground mt-2">{user.name}'s study environment.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3">
+          <UserSwitcher />
           <AddSourceDialog />
         </div>
       </header>
@@ -109,7 +114,7 @@ export default function Dashboard() {
           <div className="w-20 h-20 bg-primary/5 rounded-2xl flex items-center justify-center mb-6">
             <BookOpen className="w-10 h-10 text-primary/40" />
           </div>
-          <h2 className="text-2xl font-semibold mb-3 text-foreground">Your library is empty</h2>
+          <h2 className="text-2xl font-semibold mb-3 text-foreground">{user.name}'s library is empty</h2>
           <p className="text-muted-foreground mb-8">
             Add a YouTube video or paste your study notes to automatically generate smart flashcards and summaries.
           </p>

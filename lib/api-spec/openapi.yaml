@@ -9,6 +9,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: users
+    description: User operations
   - name: sources
     description: Study source operations
   - name: flashcards
@@ -28,6 +30,21 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
 
   /sources:
     get:
@@ -365,6 +382,20 @@ components:
           type: string
         marks:
           type: ["integer", "null"]
+        createdAt:
+          type: string
+
+    User:
+      type: object
+      required:
+        - id
+        - name
+        - createdAt
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
         createdAt:
           type: string
 

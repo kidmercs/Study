@@ -20,3 +20,4 @@ export * from './sourceInputSourceType';
 export * from './sourceSourceType';
 export * from './sourceStatus';
 export * from './stats';
+export * from './user';
